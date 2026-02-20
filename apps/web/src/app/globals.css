@@ -33,53 +33,52 @@
   --color-editor-line-hl: var(--theme-editor-line-hl);
   --color-editor-selection: var(--theme-editor-selection);
 }
-
-/* ─── Dark theme (Catppuccin Mocha) ──────────────── */
+/* ─── Dark theme (Darker Green Mocha) ──────────────── */
 [data-theme="dark"] {
-  --theme-bg-primary: #1e1e2e;
-  --theme-bg-secondary: #181825;
-  --theme-bg-tertiary: #11111b;
-  --theme-bg-elevated: #313244;
-  --theme-border: #45475a;
-  --theme-text-primary: #cdd6f4;
-  --theme-text-secondary: #a6adc8;
-  --theme-text-muted: #6c7086;
-  --theme-accent: #89b4fa;
-  --theme-accent-hover: #74c7ec;
-  --theme-success: #a6e3a1;
+  --theme-bg-primary: #101810;       /* almost black green */
+  --theme-bg-secondary: #0c120c;     /* very dark green for panels */
+  --theme-bg-tertiary: #080a08;      /* deepest background */
+  --theme-bg-elevated: #1a2a1a;      /* for cards/menus, slightly lighter */
+  --theme-border: #2b422b;           /* subtle dark green border */
+  --theme-text-primary: #cde6d1;     /* light greenish text for contrast */
+  --theme-text-secondary: #a8bfb0;   /* secondary text */
+  --theme-text-muted: #4f5a4f;       /* muted text */
+  --theme-accent: #6fcf97;           /* green accent */
+  --theme-accent-hover: #5fbd84;     /* hover accent */
+  --theme-success: #a6e3a1;          /* success green */
   --theme-error: #f38ba8;
-  --theme-warning: #fab387;
+  --theme-warning: #f0c987;
 
-  --theme-editor-bg: #1e1e2e;
-  --theme-editor-gutter: #181825;
-  --theme-editor-line-hl: #2a2b3d;
-  --theme-editor-selection: rgba(137, 180, 250, 0.3);
+  --theme-editor-bg: #101810;
+  --theme-editor-gutter: #0c120c;
+  --theme-editor-line-hl: #152215;   /* subtle line highlight */
+  --theme-editor-selection: rgba(111, 207, 151, 0.3);
 
-  --theme-pdf-shadow: rgba(0, 0, 0, 0.3);
+  --theme-pdf-shadow: rgba(0, 0, 0, 0.5);
 
   color-scheme: dark;
 }
 
-/* ─── Light theme (Catppuccin Latte) ─────────────── */
+/* ─── Light theme (Greenish Latte) ─────────────── */
 [data-theme="light"] {
-  --theme-bg-primary: #eff1f5;
-  --theme-bg-secondary: #e6e9ef;
-  --theme-bg-tertiary: #dce0e8;
-  --theme-bg-elevated: #ccd0da;
-  --theme-border: #bcc0cc;
-  --theme-text-primary: #4c4f69;
-  --theme-text-secondary: #5c5f77;
-  --theme-text-muted: #8c8fa1;
-  --theme-accent: #1e66f5;
-  --theme-accent-hover: #2a6ef5;
+  --theme-bg-primary: #eff9ef;       /* pale mint */
+  --theme-bg-secondary: #e6f3e6;     /* slightly darker */
+  --theme-bg-tertiary: #dcebdc;      /* for panels/menus */
+  --theme-bg-elevated: #cce2cc;      /* card background */
+  --theme-border: #bcd2bc;           /* soft green border */
+  --theme-text-primary: #3a4b3a;     /* dark green text */
+  --theme-text-secondary: #4c5b4c;   /* secondary text */
+  --theme-text-muted: #7a8c7a;       /* muted text */
+  --theme-accent: #28a745;           /* bright green accent */
+  --theme-accent-hover: #1f8f3a;     /* hover accent */
   --theme-success: #40a02b;
   --theme-error: #d20f39;
-  --theme-warning: #fe640b;
+  --theme-warning: #fe9f40;
 
-  --theme-editor-bg: #eff1f5;
-  --theme-editor-gutter: #e6e9ef;
-  --theme-editor-line-hl: #dce0e8;
-  --theme-editor-selection: #acb0be;
+  --theme-editor-bg: #eff9ef;
+  --theme-editor-gutter: #e6f3e6;
+  --theme-editor-line-hl: #dcebdc;
+  --theme-editor-selection: #a6d3a3;
 
   --theme-pdf-shadow: rgba(0, 0, 0, 0.1);
 

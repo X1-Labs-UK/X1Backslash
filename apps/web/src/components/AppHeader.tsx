@@ -84,9 +84,7 @@ export function AppHeader({ children, leftContent, className }: AppHeaderProps) 
             href="/dashboard"
             className="flex items-center gap-1.5 shrink-0 text-accent hover:text-accent-hover transition-colors"
           >
-            <span className="text-base font-bold hidden sm:inline font-mono">
-              \Backslash
-            </span>
+            <img src="/icon.png" alt="Logo" className="h-8 w-8" />
           </a>
           <a
             href="https://github.com/Manan-Santoki/Backslash"

@@ -46,9 +46,7 @@ export default async function HomePage() {
       <nav className="border-b border-border bg-bg-secondary/50 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold text-accent font-mono">
-              \Backslash
-            </span>
+            <img src="/icon.png" alt="Logo" className="h-10 w-10" />
           </Link>
           <div className="flex items-center gap-4">
             {isLoggedIn ? (
@@ -62,16 +60,11 @@ export default async function HomePage() {
               <>
                 <Link
                   href="/login"
-                  className="text-sm text-text-secondary transition-colors hover:text-text-primary"
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover"
                 >
                   Sign in
                 </Link>
-                <Link
-                  href="/register"
-                  className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover"
-                >
-                  Get Started
-                </Link>
+                
               </>
             )}
           </div>
@@ -81,19 +74,18 @@ export default async function HomePage() {
       {/* Hero Section */}
       <section className="mx-auto max-w-6xl px-6 py-24 text-center">
         <h1 className="text-5xl font-bold tracking-tight text-text-primary sm:text-6xl">
-          LaTeX editing,{" "}
+          X1 Labs,{" "}
           <span className="text-accent">simplified.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-text-secondary">
-          Self-hostable, open-source LaTeX editor with live PDF preview.
-          Write beautiful documents with a modern editing experience.
+          The writing platform for X1 Labs colleagues, based off the open-source Backslash project. This page is for internal use only, and is not intended for public access. Please do not share this link outside of X1 Labs.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4">
           <Link
-            href={isLoggedIn ? "/dashboard" : "/register"}
+            href={isLoggedIn ? "/dashboard" : "/login"}
             className="rounded-lg bg-accent px-6 py-3 text-base font-medium text-bg-primary transition-colors hover:bg-accent-hover"
           >
-            {isLoggedIn ? "Open Dashboard" : "Get Started"}
+            {isLoggedIn ? "Open Dashboard" : "Log In"}
           </Link>
           <a
             href="https://github.com/Manan-Santoki/Backslash"
@@ -104,39 +96,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Feature Grid */}
-      <section className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="grid gap-6 sm:grid-cols-2">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-lg border border-border bg-bg-secondary p-6 transition-colors hover:bg-bg-elevated/50"
-            >
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                <feature.icon className="h-5 w-5 text-accent" />
-              </div>
-              <h3 className="text-lg font-semibold text-text-primary">
-                {feature.title}
-              </h3>
-              <p className="mt-2 text-sm text-text-secondary">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-bg-secondary/50">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-          <span className="text-sm text-text-muted font-mono">
-            \Backslash
-          </span>
-          <span className="text-sm text-text-muted">
-            Open-source LaTeX editor
-          </span>
-        </div>
-      </footer>
     </div>
   );
 }
