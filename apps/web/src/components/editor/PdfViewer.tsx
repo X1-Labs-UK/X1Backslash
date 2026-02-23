@@ -253,7 +253,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-full flex-col bg-bg-tertiary">
+      <div className="flex h-full min-h-0 flex-col bg-bg-tertiary">
         {/* PDF Toolbar */}
         <div className="flex items-center justify-between border-b border-border bg-bg-secondary px-3 py-1.5">
           <span className="text-xs font-medium text-text-muted">Preview</span>
@@ -357,9 +357,9 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         </div>
 
         {/* PDF Content */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-h-0 overflow-hidden">
           {loading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-tertiary/80">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-bg-tertiary/80">
               <div className="flex flex-col items-center gap-2 animate-fade-in">
                 <Loader2 className="h-6 w-6 animate-spin text-accent" />
                 <span className="text-xs text-text-muted">Compiling...</span>
@@ -367,7 +367,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
             </div>
           )}
 
-          <div ref={containerRef} className="h-full overflow-auto">
+          <div ref={containerRef} className="h-full min-h-0 overflow-auto overscroll-contain">
             {!pdfUrl && !loading && (
               <div className="flex h-full items-center justify-center animate-fade-in">
                 <div className="flex flex-col items-center gap-3 px-4 text-center">
