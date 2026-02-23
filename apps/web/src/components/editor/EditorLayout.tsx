@@ -5,6 +5,7 @@ import {
   Panel,
   PanelGroup,
   PanelResizeHandle,
+  ImperativePanelHandle,
 } from "react-resizable-panels";
 import { EditorHeader } from "@/components/editor/EditorHeader";
 import { FileTree } from "@/components/editor/FileTree";
@@ -162,6 +163,7 @@ export function EditorLayout({
   const [buildErrors, setBuildErrors] = useState<LogError[]>([]);
   const [aiFixExplanation, setAiFixExplanation] = useState<string | null>(null);
   const [fixingWithAi, setFixingWithAi] = useState(false);
+  const [buildLogsExpanded, setBuildLogsExpanded] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
 
   // Disable auto-compile if last build failed (prevents rebuild loop on refresh)
@@ -227,6 +229,7 @@ export function EditorLayout({
 
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
+  const buildLogsPanelRef = useRef<ImperativePanelHandle>(null);
   const editorScrollRef = useRef<number | null>(null);
   const editorSelectionRef = useRef<{ anchor: number; head: number } | null>(
     null
@@ -1337,6 +1340,14 @@ export function EditorLayout({
     };
   }, [clearAllPolling]);
 
+  useEffect(() => {
+    if (buildLogsExpanded) {
+      buildLogsPanelRef.current?.expand();
+      return;
+    }
+    buildLogsPanelRef.current?.collapse();
+  }, [buildLogsExpanded]);
+
   return (
     <div className="flex h-full w-full flex-col bg-bg-primary">
       {/* Top header */}
@@ -1478,7 +1489,15 @@ export function EditorLayout({
           <PanelResizeHandle className="h-2 cursor-row-resize touch-none bg-transparent transition-colors hover:bg-accent/30 data-[resize-handle-active]:bg-accent/30 relative after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-px after:bg-border" />
 
           {/* Build logs */}
-          <Panel defaultSize={20} minSize={5} collapsible collapsedSize={4}>
+          <Panel
+            ref={buildLogsPanelRef}
+            defaultSize={20}
+            minSize={5}
+            collapsible
+            collapsedSize={4}
+            onCollapse={() => setBuildLogsExpanded(false)}
+            onExpand={() => setBuildLogsExpanded(true)}
+          >
             <BuildLogs
               logs={buildLogs}
               status={buildStatus}
@@ -1490,6 +1509,8 @@ export function EditorLayout({
               fixingWithAi={fixingWithAi}
               onFixWithAi={handleFixWithAi}
               aiExplanation={aiFixExplanation}
+              expanded={buildLogsExpanded}
+              onExpandedChange={setBuildLogsExpanded}
             />
           </Panel>
         </PanelGroup>

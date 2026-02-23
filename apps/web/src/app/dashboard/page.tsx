@@ -8,6 +8,7 @@ import {
   FileText,
   Clock,
   Trash2,
+  Pencil,
   MoreVertical,
   X,
   Loader2,
@@ -17,6 +18,11 @@ import {
 
 // ─── Types ──────────────────────────────────────────
 interface PrimitiveLabel {
+  name: string;
+}
+
+interface LabelDraft {
+  id?: string;
   name: string;
 }
 
@@ -143,18 +149,51 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [template, setTemplate] = useState<Template>("blank");
-  const [labels, setLabels] = useState<PrimitiveLabel[]>([]);
+  const [labels, setLabels] = useState<LabelDraft[]>([]);
   const [engine, setEngine] = useState<EngineOption>("auto");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [currentLabel, setCurrentLabel] = useState("");
+  const [labelToAdd, setLabelToAdd] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+
+  const availableLabels = defaultLabels.filter(
+    (label) =>
+      !labels.some(
+        (selected) =>
+          selected.name.trim().toLowerCase() === label.name.trim().toLowerCase()
+      )
+  );
+
+  useEffect(() => {
+    if (availableLabels.length === 0) {
+      setLabelToAdd("");
+      return;
+    }
+    if (!labelToAdd || !availableLabels.some((label) => label.id === labelToAdd)) {
+      setLabelToAdd(availableLabels[0].id);
+    }
+  }, [availableLabels, labelToAdd]);
+
+  function addLabel(nextLabel: LabelDraft) {
+    const normalized = nextLabel.name.trim();
+    if (!normalized) return;
+    if (
+      labels.some(
+        (label) => label.name.trim().toLowerCase() === normalized.toLowerCase()
+      )
+    ) {
+      return;
+    }
+    setLabels((prev) => [...prev, { id: nextLabel.id, name: normalized }]);
+  }
 
   function resetForm() {
     setName("");
     setDescription("");
     setTemplate("blank");
     setLabels([]);
-    setCurrentLabel("");
+    setLabelToAdd("");
+    setCustomLabel("");
     setEngine("auto");
     setError("");
   }
@@ -179,12 +218,15 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
 
       // Attach all the labels specified
       const { project } = await res.json();
-      await Promise.all(labels.map(label =>
+      await Promise.all(
+        labels.map((label) =>
           fetch(`/api/labels/attach`, {
             method: "PUT",
-            body: JSON.stringify({labelName: label.name, projectId: project.id}),
+            body: JSON.stringify({ labelName: label.name, projectId: project.id }),
             headers: { "Content-Type": "application/json" },
-          })));
+          })
+        )
+      );
 
       resetForm();
       onCreated();
@@ -322,34 +364,66 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
               </label>
 
               <div className="flex items-center gap-2">
-              <input
-                id="labels"
-                list="labels-data"
-                type="text"
-                value={currentLabel}
-                onChange={(e) => setCurrentLabel(e.target.value)}
-                placeholder="Labels to identify and organize your projects"
-                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
-              />
+                <select
+                  id="labels"
+                  value={labelToAdd}
+                  onChange={(e) => setLabelToAdd(e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                >
+                  {availableLabels.length === 0 ? (
+                    <option value="">No labels available</option>
+                  ) : (
+                    availableLabels.map((label) => (
+                      <option key={`LABEL_OPTION__${label.id}`} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))
+                  )}
+                </select>
 
-              <datalist id="labels-data">
-              {defaultLabels.filter(x => !labels.some(y => x.name === y.name)).map((label) => (
-                <option key={`DATALIST__${label.id}`} value={label.name} />
-              ))}
-              </datalist>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selected = availableLabels.find(
+                      (label) => label.id === labelToAdd
+                    );
+                    if (!selected) return;
+                    addLabel({ id: selected.id, name: selected.name });
+                  }}
+                  className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!labelToAdd || availableLabels.length === 0}
+                >
+                  Add
+                </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setLabels([...labels, { name: currentLabel }]);
-                  setCurrentLabel("");
-                }}
-                className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!currentLabel.trim() || labels.some((l) => l.name === currentLabel.trim())}
-              >
-                Add
-              </button>
-            </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  placeholder="Or add a new label"
+                  className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    addLabel({ name: customLabel });
+                    setCustomLabel("");
+                  }}
+                  className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={
+                    !customLabel.trim() ||
+                    labels.some(
+                      (label) =>
+                        label.name.trim().toLowerCase() ===
+                        customLabel.trim().toLowerCase()
+                    )
+                  }
+                >
+                  Add New
+                </button>
+              </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               {labels.map((label, i) => (
@@ -465,6 +539,306 @@ function DeleteDialog({
   );
 }
 
+// ─── Edit Project Dialog ───────────────────────────
+
+interface EditProjectDialogProps {
+  open: boolean;
+  project: Project | null;
+  defaultLabels: Label[];
+  onClose: () => void;
+  onUpdated: () => void;
+}
+
+function EditProjectDialog({
+  open,
+  project,
+  defaultLabels,
+  onClose,
+  onUpdated,
+}: EditProjectDialogProps) {
+  const [name, setName] = useState("");
+  const [labels, setLabels] = useState<LabelDraft[]>([]);
+  const [labelToAdd, setLabelToAdd] = useState("");
+  const [customLabel, setCustomLabel] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open || !project) return;
+    setName(project.name);
+    setLabels(project.labels.map((label) => ({ id: label.id, name: label.name })));
+    setCustomLabel("");
+    setError("");
+  }, [open, project]);
+
+  const availableLabels = defaultLabels.filter(
+    (label) =>
+      !labels.some(
+        (selected) =>
+          selected.name.trim().toLowerCase() === label.name.trim().toLowerCase()
+      )
+  );
+
+  useEffect(() => {
+    if (availableLabels.length === 0) {
+      setLabelToAdd("");
+      return;
+    }
+    if (!labelToAdd || !availableLabels.some((label) => label.id === labelToAdd)) {
+      setLabelToAdd(availableLabels[0].id);
+    }
+  }, [availableLabels, labelToAdd]);
+
+  function addLabel(nextLabel: LabelDraft) {
+    const normalized = nextLabel.name.trim();
+    if (!normalized) return;
+    if (
+      labels.some(
+        (label) => label.name.trim().toLowerCase() === normalized.toLowerCase()
+      )
+    ) {
+      return;
+    }
+    setLabels((prev) => [...prev, { id: nextLabel.id, name: normalized }]);
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!project) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const updateRes = await fetch(`/api/projects/${project.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+
+      if (!updateRes.ok) {
+        const payload = await updateRes.json().catch(() => ({}));
+        setError(payload.error || "Failed to update project");
+        return;
+      }
+
+      const originalByName = new Map(
+        project.labels.map((label) => [label.name.trim().toLowerCase(), label])
+      );
+      const selectedByName = new Map(
+        labels.map((label) => [label.name.trim().toLowerCase(), label])
+      );
+
+      const labelsToRemove = project.labels.filter(
+        (label) => !selectedByName.has(label.name.trim().toLowerCase())
+      );
+      const labelsToAdd = labels.filter(
+        (label) => !originalByName.has(label.name.trim().toLowerCase())
+      );
+
+      await Promise.all(
+        labelsToRemove.map(async (label) => {
+          const detachRes = await fetch("/api/labels/detach", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId: project.id, labelId: label.id }),
+          });
+          if (!detachRes.ok && detachRes.status !== 404) {
+            const payload = await detachRes.json().catch(() => ({}));
+            throw new Error(payload.error || `Failed to detach ${label.name}`);
+          }
+        })
+      );
+
+      await Promise.all(
+        labelsToAdd.map(async (label) => {
+          const attachRes = await fetch("/api/labels/attach", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId: project.id, labelName: label.name }),
+          });
+          if (!attachRes.ok && attachRes.status !== 409) {
+            const payload = await attachRes.json().catch(() => ({}));
+            throw new Error(payload.error || `Failed to attach ${label.name}`);
+          }
+        })
+      );
+
+      onUpdated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update project");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open || !project) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      <div className="relative z-10 w-full max-w-lg rounded-lg border border-border bg-bg-primary p-6 shadow-xl">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-text-primary">Edit Project</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-text-muted transition-colors hover:text-text-primary hover:bg-bg-elevated"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-error/10 px-4 py-3 text-sm text-error">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="edit-project-name"
+              className="mb-1.5 block text-sm font-medium text-text-secondary"
+            >
+              Project name
+            </label>
+            <input
+              id="edit-project-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              maxLength={255}
+              className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="edit-project-labels"
+              className="mb-1.5 block text-sm font-medium text-text-secondary"
+            >
+              Labels
+            </label>
+
+            <div className="flex items-center gap-2">
+              <select
+                id="edit-project-labels"
+                value={labelToAdd}
+                onChange={(e) => setLabelToAdd(e.target.value)}
+                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+              >
+                {availableLabels.length === 0 ? (
+                  <option value="">No labels available</option>
+                ) : (
+                  availableLabels.map((label) => (
+                    <option key={`EDIT_LABEL_OPTION__${label.id}`} value={label.id}>
+                      {label.name}
+                    </option>
+                  ))
+                )}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const selected = availableLabels.find(
+                    (label) => label.id === labelToAdd
+                  );
+                  if (!selected) return;
+                  addLabel({ id: selected.id, name: selected.name });
+                }}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!labelToAdd || availableLabels.length === 0}
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                type="text"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                placeholder="Or add a new label"
+                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  addLabel({ name: customLabel });
+                  setCustomLabel("");
+                }}
+                className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  !customLabel.trim() ||
+                  labels.some(
+                    (label) =>
+                      label.name.trim().toLowerCase() ===
+                      customLabel.trim().toLowerCase()
+                  )
+                }
+              >
+                Add New
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {labels.map((label, i) => (
+                <span
+                  key={`EDIT_LABEL__${label.id ?? label.name}__${i}`}
+                  className="inline-flex items-center rounded-full bg-bg-elevated px-2.5 py-0.5 text-xs font-medium text-text-secondary"
+                >
+                  {label.name}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabels((prev) => prev.filter((_, idx) => idx !== i));
+                    }}
+                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-border bg-bg-elevated px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-border"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim()}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Filter Labels Dialog ─────────────────────
 
@@ -519,29 +893,35 @@ function FilterLabelsDialog({
         </p>
 
         <div className="mt-4 max-h-72 overflow-y-auto pr-1">
-          <div className="space-y-3">
-            {labels.map((label) => {
-              const selected = isSelected(label);
+          {labels.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-bg-secondary/50 px-3 py-6 text-center text-sm text-text-muted">
+              No labels available.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {labels.map((label) => {
+                const selected = isSelected(label);
 
-              return (
-                <button
-                  key={label.id}
-                  type="button"
-                  onClick={() => toggleLabel(label)}
-                  className={`w-full rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors ${
-                    selected
-                      ? "border-accent bg-accent/20 text-text-primary"
-                      : "border-border bg-bg-primary text-text-secondary hover:bg-bg-secondary"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Tag className="h-4 w-4"/>
-                    <span>{label.name}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                return (
+                  <button
+                    key={label.id}
+                    type="button"
+                    onClick={() => toggleLabel(label)}
+                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors ${
+                      selected
+                        ? "border-accent bg-accent/20 text-text-primary"
+                        : "border-border bg-bg-primary text-text-secondary hover:bg-bg-secondary"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4"/>
+                      <span>{label.name}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
 
@@ -570,14 +950,21 @@ function FilterLabelsDialog({
 // ─── Project Card Menu ──────────────────────────────
 
 interface CardMenuProps {
+  onEdit: () => void;
   onDelete: () => void;
 }
 
-function CardMenu({ onDelete }: CardMenuProps) {
+function CardMenu({ onEdit, onDelete }: CardMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -592,8 +979,28 @@ function CardMenu({ onDelete }: CardMenuProps) {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="fixed inset-0 z-10"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          />
           <div className="absolute right-0 top-full z-20 mt-1 min-w-[140px] rounded-lg border border-border bg-bg-secondary py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(false);
+                onEdit();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </button>
             <button
               type="button"
               onClick={(e) => {
@@ -619,14 +1026,15 @@ function CardMenu({ onDelete }: CardMenuProps) {
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<SharedProject[]>([]);
+  const [currentUserName, setCurrentUserName] = useState("there");
   const [loading, setLoading] = useState(true);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showFilterDialog, setShowFilterDialog] = useState(false);
+  const [editTarget, setEditTarget] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [labels, setLabels] = useState<Label[]>([]);
   const [filteredLabels, setFilteredLabels] = useState<Label[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -655,14 +1063,34 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const nextName =
+          typeof data.user?.name === "string" ? data.user.name.trim() : "";
+        if (nextName) {
+          setCurrentUserName(nextName);
+        }
+      }
+    } catch {
+      // Silently fail -- greeting falls back to "there"
+    }
+  }, []);
+
   const fetchAll = useCallback(() => {
     fetchProjects();
     fetchLabels();
   }, [fetchProjects, fetchLabels]);
 
   useEffect(() => {
+    fetchCurrentUser();
+  }, [fetchCurrentUser]);
+
+  useEffect(() => {
     fetchAll();
-  }, [fetchProjects, fetchLabels]);
+  }, [fetchAll]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -673,7 +1101,7 @@ export default function DashboardPage() {
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [fetchProjects, fetchLabels]);
+  }, [fetchAll]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -695,30 +1123,25 @@ export default function DashboardPage() {
     }
   }
 
-  useMemo(()=>{
-    if(filteredLabels.length === 0) {
-      setFilteredProjects(projects);
-      return;
-    }
-
-    setFilteredProjects(projects.filter(project => {
-      for(const label of filteredLabels) {
-        if(!project.labels.some(l => l.id === label.id)) {
-          return false;
-        }
-      }
-      return true;
-    }));
-  }, [filteredLabels, projects])
+  const filteredProjects = useMemo(() => {
+    if (filteredLabels.length === 0) return projects;
+    return projects.filter((project) =>
+      filteredLabels.every((label) =>
+        project.labels.some((projectLabel) => projectLabel.id === label.id)
+      )
+    );
+  }, [filteredLabels, projects]);
 
   return (
     <>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">My Projects</h1>
+          <h1 className="text-2xl font-bold text-text-primary">
+            Hi, {currentUserName}
+          </h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Manage your LaTeX documents
+            Here are your projects
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -791,7 +1214,10 @@ export default function DashboardPage() {
                     {project.name}
                   </h3>
                 </div>
-                <CardMenu onDelete={() => setDeleteTarget(project)} />
+                <CardMenu
+                  onEdit={() => setEditTarget(project)}
+                  onDelete={() => setDeleteTarget(project)}
+                />
               </div>
 
               {project.description && (
@@ -961,6 +1387,14 @@ export default function DashboardPage() {
         onClose={() => setShowNewDialog(false)}
         onCreated={fetchAll}
         defaultLabels={labels}
+      />
+
+      <EditProjectDialog
+        open={editTarget !== null}
+        project={editTarget}
+        defaultLabels={labels}
+        onClose={() => setEditTarget(null)}
+        onUpdated={fetchAll}
       />
 
       <DeleteDialog

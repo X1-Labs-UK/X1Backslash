@@ -33,6 +33,8 @@ interface BuildLogsProps {
   fixingWithAi?: boolean;
   onFixWithAi?: () => void;
   aiExplanation?: string | null;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 // ─── Helpers ────────────────────────────────────────
@@ -92,8 +94,20 @@ export function BuildLogs({
   fixingWithAi = false,
   onFixWithAi,
   aiExplanation = null,
+  expanded,
+  onExpandedChange,
 }: BuildLogsProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [internalExpanded, setInternalExpanded] = useState(true);
+  const isControlled = typeof expanded === "boolean";
+  const isExpanded = isControlled ? (expanded as boolean) : internalExpanded;
+
+  const toggleExpanded = () => {
+    const next = !isExpanded;
+    if (!isControlled) {
+      setInternalExpanded(next);
+    }
+    onExpandedChange?.(next);
+  };
 
   const errorCount = errors.filter(
     (e) => e.type === "error" || e.type === "fatal"
@@ -152,10 +166,10 @@ export function BuildLogs({
           )}
           <button
             type="button"
-            onClick={() => setExpanded(!expanded)}
+            onClick={toggleExpanded}
             className="flex items-center text-text-muted"
           >
-            {expanded ? (
+            {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
               <ChevronUp className="h-4 w-4" />
@@ -165,7 +179,7 @@ export function BuildLogs({
       </div>
 
       {/* Expanded content */}
-      {expanded && (
+      {isExpanded && (
         <div className="flex-1 min-h-0 overflow-auto">
           {aiExplanation && (
             <div className="border-b border-border bg-accent/5 px-4 py-2">

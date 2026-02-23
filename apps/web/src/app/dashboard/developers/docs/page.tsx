@@ -851,7 +851,7 @@ curl "${BASE}/compile/JOB_ID/output?format=pdf" \\
 
 function TableOfContents({ sections }: { sections: EndpointSection[] }) {
   return (
-    <nav className="hidden lg:block sticky top-24 w-56 shrink-0">
+    <nav className="hidden lg:block w-56 shrink-0 self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
       <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
         On this page
       </h3>
@@ -899,7 +899,7 @@ export default function ApiDocsPage() {
   const sections = useMemo(() => getSections(origin), [origin]);
 
   return (
-    <div className="flex gap-8">
+    <div className="flex items-start gap-8">
       {/* Main content */}
       <div className="flex-1 min-w-0">
         {/* Back link & heading */}
