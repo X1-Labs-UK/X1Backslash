@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type FormEvent, useMemo } from "react";
+import { useState, useEffect, useCallback, type FormEvent, useMemo, useRef } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -20,7 +20,10 @@ import {
   X,
   Loader2,
   Filter,
-  Tag
+  Tag,
+  Lock,
+  Globe2,
+  Search,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────
@@ -123,6 +126,203 @@ function buildStatusLabel(status: string | null): string {
   }
 }
 
+interface LabelPickerProps {
+  inputId: string;
+  selectedLabels: LabelDraft[];
+  defaultLabels: Label[];
+  onChange: (labels: LabelDraft[]) => void;
+}
+
+function LabelPicker({
+  inputId,
+  selectedLabels,
+  defaultLabels,
+  onChange,
+}: LabelPickerProps) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  const selectedNameSet = useMemo(
+    () =>
+      new Set(
+        selectedLabels.map((label) => label.name.trim().toLowerCase())
+      ),
+    [selectedLabels]
+  );
+
+  const availableLabels = useMemo(
+    () =>
+      defaultLabels.filter(
+        (label) => !selectedNameSet.has(label.name.trim().toLowerCase())
+      ),
+    [defaultLabels, selectedNameSet]
+  );
+
+  const normalizedQuery = query.trim();
+  const normalizedQueryLower = normalizedQuery.toLowerCase();
+
+  const matchingLabels = useMemo(() => {
+    const pool = normalizedQueryLower
+      ? availableLabels.filter((label) =>
+          label.name.toLowerCase().includes(normalizedQueryLower)
+        )
+      : availableLabels;
+    return pool.slice(0, 6);
+  }, [availableLabels, normalizedQueryLower]);
+
+  const exactMatch = useMemo(
+    () =>
+      availableLabels.find(
+        (label) => label.name.trim().toLowerCase() === normalizedQueryLower
+      ),
+    [availableLabels, normalizedQueryLower]
+  );
+
+  const canCreateFromQuery =
+    normalizedQuery.length > 0 &&
+    !selectedNameSet.has(normalizedQueryLower) &&
+    !exactMatch;
+
+  const addLabel = useCallback(
+    (nextLabel: LabelDraft) => {
+      const normalizedName = nextLabel.name.trim();
+      if (!normalizedName) return;
+      if (selectedNameSet.has(normalizedName.toLowerCase())) return;
+
+      onChange([
+        ...selectedLabels,
+        {
+          id: nextLabel.id,
+          name: normalizedName,
+        },
+      ]);
+      setQuery("");
+      setOpen(false);
+    },
+    [onChange, selectedLabels, selectedNameSet]
+  );
+
+  const removeLabel = useCallback(
+    (index: number) => {
+      onChange(selectedLabels.filter((_, i) => i !== index));
+    },
+    [onChange, selectedLabels]
+  );
+
+  const handleAddFromInput = useCallback(() => {
+    if (!normalizedQuery) return;
+    if (exactMatch) {
+      addLabel({ id: exactMatch.id, name: exactMatch.name });
+      return;
+    }
+    if (canCreateFromQuery) {
+      addLabel({ name: normalizedQuery });
+    }
+  }, [addLabel, canCreateFromQuery, exactMatch, normalizedQuery]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  return (
+    <div className="space-y-2">
+      <div ref={wrapperRef} className="relative">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+            <input
+              id={inputId}
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              onFocus={() => setOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddFromInput();
+                }
+              }}
+              placeholder="Search existing labels or add a new one"
+              className="w-full rounded-lg border border-border bg-bg-secondary py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleAddFromInput}
+            disabled={!normalizedQuery || selectedNameSet.has(normalizedQueryLower)}
+            className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+
+        {open && (matchingLabels.length > 0 || canCreateFromQuery) && (
+          <div className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-lg border border-border bg-bg-secondary shadow-lg">
+            {matchingLabels.map((label) => (
+              <button
+                key={`LABEL_SUGGESTION__${label.id}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addLabel({ id: label.id, name: label.name })}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              >
+                <span>{label.name}</span>
+                <span className="text-xs text-text-muted">existing</span>
+              </button>
+            ))}
+            {canCreateFromQuery && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => addLabel({ name: normalizedQuery })}
+                className="flex w-full items-center justify-between border-t border-border px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+              >
+                <span>Create “{normalizedQuery}”</span>
+                <span className="text-xs text-text-muted">new</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {selectedLabels.length === 0 && (
+          <span className="text-xs text-text-muted">No labels selected.</span>
+        )}
+        {selectedLabels.map((label, index) => (
+          <span
+            key={`SELECTED_LABEL__${label.id ?? label.name}__${index}`}
+            className="inline-flex items-center rounded-full bg-bg-elevated px-2.5 py-0.5 text-xs font-medium text-text-secondary"
+          >
+            {label.name}
+            <button
+              type="button"
+              onClick={() => removeLabel(index)}
+              className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Skeleton Card ──────────────────────────────────
 
 function SkeletonCard() {
@@ -160,47 +360,12 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
   const [engine, setEngine] = useState<EngineOption>("auto");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [labelToAdd, setLabelToAdd] = useState("");
-  const [customLabel, setCustomLabel] = useState("");
-
-  const availableLabels = defaultLabels.filter(
-    (label) =>
-      !labels.some(
-        (selected) =>
-          selected.name.trim().toLowerCase() === label.name.trim().toLowerCase()
-      )
-  );
-
-  useEffect(() => {
-    if (availableLabels.length === 0) {
-      setLabelToAdd("");
-      return;
-    }
-    if (!labelToAdd || !availableLabels.some((label) => label.id === labelToAdd)) {
-      setLabelToAdd(availableLabels[0].id);
-    }
-  }, [availableLabels, labelToAdd]);
-
-  function addLabel(nextLabel: LabelDraft) {
-    const normalized = nextLabel.name.trim();
-    if (!normalized) return;
-    if (
-      labels.some(
-        (label) => label.name.trim().toLowerCase() === normalized.toLowerCase()
-      )
-    ) {
-      return;
-    }
-    setLabels((prev) => [...prev, { id: nextLabel.id, name: normalized }]);
-  }
 
   function resetForm() {
     setName("");
     setDescription("");
     setTemplate("blank");
     setLabels([]);
-    setLabelToAdd("");
-    setCustomLabel("");
     setEngine("auto");
     setError("");
   }
@@ -375,93 +540,12 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
               >
                 Labels
               </label>
-
-              <div className="flex items-center gap-2">
-                <Select
-                  value={labelToAdd || undefined}
-                  onValueChange={setLabelToAdd}
-                  disabled={availableLabels.length === 0}
-                >
-                  <SelectTrigger id="labels" className="flex-1">
-                    <SelectValue
-                      placeholder={
-                        availableLabels.length === 0
-                          ? "No labels available"
-                          : "Select a label"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableLabels.map((label) => (
-                      <SelectItem key={`LABEL_OPTION__${label.id}`} value={label.id}>
-                        {label.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selected = availableLabels.find(
-                      (label) => label.id === labelToAdd
-                    );
-                    if (!selected) return;
-                    addLabel({ id: selected.id, name: selected.name });
-                  }}
-                  className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!labelToAdd || availableLabels.length === 0}
-                >
-                  Add
-                </button>
-              </div>
-
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={customLabel}
-                  onChange={(e) => setCustomLabel(e.target.value)}
-                  placeholder="Or add a new label"
-                  className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    addLabel({ name: customLabel });
-                    setCustomLabel("");
-                  }}
-                  className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={
-                    !customLabel.trim() ||
-                    labels.some(
-                      (label) =>
-                        label.name.trim().toLowerCase() ===
-                        customLabel.trim().toLowerCase()
-                    )
-                  }
-                >
-                  Add New
-                </button>
-              </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {labels.map((label, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center rounded-full bg-bg-elevated px-2.5 py-0.5 text-xs font-medium text-text-secondary"
-                >
-                  {label.name}
-
-                  <button
-                    type="button"
-                    onClick={() => {setLabels(labels.filter((_, idx) => idx !== i))}}
-                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
-                  >
-                    <X/>
-                  </button>
-                </span>
-              ))}
-            </div>
+              <LabelPicker
+                inputId="labels"
+                selectedLabels={labels}
+                defaultLabels={defaultLabels}
+                onChange={setLabels}
+              />
           </div>
 
           {/* Actions */}
@@ -576,50 +660,18 @@ function EditProjectDialog({
   onUpdated,
 }: EditProjectDialogProps) {
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [labels, setLabels] = useState<LabelDraft[]>([]);
-  const [labelToAdd, setLabelToAdd] = useState("");
-  const [customLabel, setCustomLabel] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open || !project) return;
     setName(project.name);
+    setDescription(project.description ?? "");
     setLabels(project.labels.map((label) => ({ id: label.id, name: label.name })));
-    setCustomLabel("");
     setError("");
   }, [open, project]);
-
-  const availableLabels = defaultLabels.filter(
-    (label) =>
-      !labels.some(
-        (selected) =>
-          selected.name.trim().toLowerCase() === label.name.trim().toLowerCase()
-      )
-  );
-
-  useEffect(() => {
-    if (availableLabels.length === 0) {
-      setLabelToAdd("");
-      return;
-    }
-    if (!labelToAdd || !availableLabels.some((label) => label.id === labelToAdd)) {
-      setLabelToAdd(availableLabels[0].id);
-    }
-  }, [availableLabels, labelToAdd]);
-
-  function addLabel(nextLabel: LabelDraft) {
-    const normalized = nextLabel.name.trim();
-    if (!normalized) return;
-    if (
-      labels.some(
-        (label) => label.name.trim().toLowerCase() === normalized.toLowerCase()
-      )
-    ) {
-      return;
-    }
-    setLabels((prev) => [...prev, { id: nextLabel.id, name: normalized }]);
-  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -632,7 +684,7 @@ function EditProjectDialog({
       const updateRes = await fetch(`/api/projects/${project.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
       });
 
       if (!updateRes.ok) {
@@ -740,99 +792,37 @@ function EditProjectDialog({
 
           <div>
             <label
+              htmlFor="edit-project-description"
+              className="mb-1.5 block text-sm font-medium text-text-secondary"
+            >
+              Description
+              <span className="ml-1 text-text-muted font-normal">
+                (optional)
+              </span>
+            </label>
+            <textarea
+              id="edit-project-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="A brief description of your project"
+              className="w-full resize-none rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          <div>
+            <label
               htmlFor="edit-project-labels"
               className="mb-1.5 block text-sm font-medium text-text-secondary"
             >
               Labels
             </label>
-
-            <div className="flex items-center gap-2">
-              <Select
-                value={labelToAdd || undefined}
-                onValueChange={setLabelToAdd}
-                disabled={availableLabels.length === 0}
-              >
-                <SelectTrigger id="edit-project-labels" className="flex-1">
-                  <SelectValue
-                    placeholder={
-                      availableLabels.length === 0
-                        ? "No labels available"
-                        : "Select a label"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLabels.map((label) => (
-                    <SelectItem key={`EDIT_LABEL_OPTION__${label.id}`} value={label.id}>
-                      {label.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const selected = availableLabels.find(
-                    (label) => label.id === labelToAdd
-                  );
-                  if (!selected) return;
-                  addLabel({ id: selected.id, name: selected.name });
-                }}
-                className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg-primary transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!labelToAdd || availableLabels.length === 0}
-              >
-                Add
-              </button>
-            </div>
-
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="text"
-                value={customLabel}
-                onChange={(e) => setCustomLabel(e.target.value)}
-                placeholder="Or add a new label"
-                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  addLabel({ name: customLabel });
-                  setCustomLabel("");
-                }}
-                className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm font-medium text-text-primary transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={
-                  !customLabel.trim() ||
-                  labels.some(
-                    (label) =>
-                      label.name.trim().toLowerCase() ===
-                      customLabel.trim().toLowerCase()
-                  )
-                }
-              >
-                Add New
-              </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {labels.map((label, i) => (
-                <span
-                  key={`EDIT_LABEL__${label.id ?? label.name}__${i}`}
-                  className="inline-flex items-center rounded-full bg-bg-elevated px-2.5 py-0.5 text-xs font-medium text-text-secondary"
-                >
-                  {label.name}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLabels((prev) => prev.filter((_, idx) => idx !== i));
-                    }}
-                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-secondary hover:text-text-primary"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
+            <LabelPicker
+              inputId="edit-project-labels"
+              selectedLabels={labels}
+              defaultLabels={defaultLabels}
+              onChange={setLabels}
+            />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -1051,7 +1041,6 @@ function CardMenu({ onEdit, onDelete }: CardMenuProps) {
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<SharedProject[]>([]);
-  const [currentUserName, setCurrentUserName] = useState("there");
   const [loading, setLoading] = useState(true);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showFilterDialog, setShowFilterDialog] = useState(false);
@@ -1088,30 +1077,10 @@ export default function DashboardPage() {
     }
   }, []);
 
-  const fetchCurrentUser = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth/me", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        const nextName =
-          typeof data.user?.name === "string" ? data.user.name.trim() : "";
-        if (nextName) {
-          setCurrentUserName(nextName);
-        }
-      }
-    } catch {
-      // Silently fail -- greeting falls back to "there"
-    }
-  }, []);
-
   const fetchAll = useCallback(() => {
     fetchProjects();
     fetchLabels();
   }, [fetchProjects, fetchLabels]);
-
-  useEffect(() => {
-    fetchCurrentUser();
-  }, [fetchCurrentUser]);
 
   useEffect(() => {
     fetchAll();
@@ -1162,11 +1131,9 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">
-            Hi, {currentUserName}
-          </h1>
+          <h1 className="text-2xl font-bold text-text-primary">My Projects</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Here are your projects
+            Manage your LaTeX documents
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1267,16 +1234,23 @@ export default function DashboardPage() {
 
                 <span
                   className={cn(
-                    "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium border",
-                    project.isShared
-                      ? "border-accent/30 bg-accent/10 text-accent"
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+                    project.anyoneShared || project.sharedWithCount > 0
+                      ? "border-red-500/25 bg-red-500/10 text-red-300"
                       : "border-border bg-bg-elevated text-text-muted"
                   )}
                 >
+                  {project.anyoneShared || project.sharedWithCount > 0 ? (
+                    <Globe2 className="h-3 w-3" />
+                  ) : (
+                    <Lock className="h-3 w-3" />
+                  )}
                   {project.anyoneShared
-                    ? "Shared: Anyone"
+                    ? project.sharedWithCount > 0
+                      ? `Public +${project.sharedWithCount}`
+                      : "Public"
                     : project.sharedWithCount > 0
-                      ? `Shared: ${project.sharedWithCount}`
+                      ? `Shared ${project.sharedWithCount}`
                       : "Private"}
                 </span>
 

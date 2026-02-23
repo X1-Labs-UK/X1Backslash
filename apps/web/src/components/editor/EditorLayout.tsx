@@ -914,6 +914,7 @@ export function EditorLayout({
     async (content: string, shouldCompile: boolean) => {
       if (!canEdit) return;
       if (!activeFileId) return;
+      if (savedContentRef.current.get(activeFileId) === content) return;
 
       // Decide whether to actually trigger a compile
       const willCompile = shouldCompile && !compilingRef.current;
@@ -963,11 +964,14 @@ export function EditorLayout({
 
       setActiveFileContent(content);
 
+      let hasUnsavedChanges = false;
+
       if (activeFileId) {
         fileContentsRef.current.set(activeFileId, content);
 
         const savedContent = savedContentRef.current.get(activeFileId);
-        if (savedContent !== content) {
+        hasUnsavedChanges = savedContent !== content;
+        if (hasUnsavedChanges) {
           setDirtyFileIds((prev) => {
             const next = new Set(prev);
             next.add(activeFileId);
@@ -983,6 +987,7 @@ export function EditorLayout({
       }
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (!activeFileId || !hasUnsavedChanges) return;
 
       const delay = autoCompileEnabled ? 2000 : 1000;
 
@@ -995,12 +1000,13 @@ export function EditorLayout({
 
   const handleImmediateSave = useCallback(() => {
     if (!activeFileId) return;
+    if (!dirtyFileIds.has(activeFileId)) return;
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
     handleSave(activeFileContent, true);
-  }, [activeFileId, activeFileContent, handleSave]);
+  }, [activeFileId, activeFileContent, dirtyFileIds, handleSave]);
 
   const handleCompile = useCallback(async () => {
     if (!canEdit) return;

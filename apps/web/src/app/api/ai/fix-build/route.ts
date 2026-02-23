@@ -169,6 +169,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Permission denied" }, { status: 403 });
     }
 
+    const aiSettings = await getUserAiSettings(user.id);
+    if (!aiSettings.enabled) {
+      return NextResponse.json(
+        { error: "AI features are disabled in your settings" },
+        { status: 403 }
+      );
+    }
+
     const project = access.project;
     const projectDir = storage.getProjectDir(project.userId, projectId);
 
@@ -230,14 +238,6 @@ export async function POST(request: NextRequest) {
         line: entry.line,
         message: entry.message,
       }));
-
-    const aiSettings = await getUserAiSettings(user.id);
-    if (!aiSettings.enabled) {
-      return NextResponse.json(
-        { error: "AI features are disabled in your settings" },
-        { status: 403 }
-      );
-    }
 
     const systemPrompt = [
       "You are a senior LaTeX error-fix assistant.",
