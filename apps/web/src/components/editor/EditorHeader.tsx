@@ -8,8 +8,6 @@ import {
   FileArchive,
   Loader2,
   Square,
-  Zap,
-  ZapOff,
   CheckCircle2,
   XCircle,
   Share2,
@@ -17,6 +15,8 @@ import {
   Check,
   Ban,
 } from "lucide-react";
+import { SwitchComponent } from "@syncfusion/ej2-react-buttons";
+import "@syncfusion/ej2-react-buttons/styles/material.css";
 import {
   Tooltip,
   TooltipTrigger,
@@ -50,7 +50,7 @@ interface EditorHeaderProps {
   compiling: boolean;
   onCompile: () => void;
   autoCompileEnabled: boolean;
-  onAutoCompileToggle: () => void;
+  onAutoCompileToggle: (enabled: boolean) => void;
   buildStatus: string;
   onCancelBuild?: () => void;
   presenceUsers?: PresenceUser[];
@@ -321,22 +321,16 @@ export function EditorHeader({
           {/* Auto-compile toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onAutoCompileToggle}
-                className={cn(
-                  "rounded-md p-1.5 transition-colors",
-                  autoCompileEnabled
-                    ? "text-accent bg-accent/10 hover:bg-accent/20"
-                    : "text-text-muted hover:text-text-secondary hover:bg-bg-elevated"
-                )}
-              >
-                {autoCompileEnabled ? (
-                  <Zap className="h-4 w-4" />
-                ) : (
-                  <ZapOff className="h-4 w-4" />
-                )}
-              </button>
+              <div className="rounded-md px-1.5 py-1 transition-colors hover:bg-bg-elevated">
+                <SwitchComponent
+                  id="auto-compile-switch"
+                  cssClass="editor-auto-compile-switch custom-switch"
+                  checked={autoCompileEnabled}
+                  change={(args: { checked: boolean }) =>
+                    onAutoCompileToggle(Boolean(args.checked))
+                  }
+                />
+              </div>
             </TooltipTrigger>
             <TooltipContent>
               <p>Auto-compile {autoCompileEnabled ? "on" : "off"}</p>

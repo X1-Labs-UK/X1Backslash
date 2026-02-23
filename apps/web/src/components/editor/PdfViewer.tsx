@@ -49,6 +49,7 @@ const ZOOM_WHEEL_SENSITIVITY = 0.002;
 export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer({ pdfUrl, loading, onTextSelect }, ref) {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [documentVersion, setDocumentVersion] = useState<number>(0);
   const [zoom, setZoom] = useState<number>(1);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +86,14 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
     ro.observe(container);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    observerRef.current?.disconnect();
+    pageRefs.current.clear();
+    setNumPages(0);
+    setCurrentPage(1);
+    setDocumentVersion((prev) => prev + 1);
+  }, [pdfUrl]);
 
   function onDocumentLoadSuccess({ numPages: n }: { numPages: number }) {
     setNumPages(n);
@@ -379,6 +388,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
           {pdfUrl && (
             <div className="py-4">
               <Document
+                key={`pdf-document-${documentVersion}`}
                 file={pdfUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
                 loading={

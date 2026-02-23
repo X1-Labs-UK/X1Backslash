@@ -13,6 +13,7 @@ import {
   Upload,
   ChevronRight,
   ChevronDown,
+  Flag,
 } from "lucide-react";
 import FileIcon from "./FileIcon";
 
@@ -41,7 +42,9 @@ interface FileTreeProps {
   projectId: string;
   files: ProjectFile[];
   activeFileId: string | null;
+  mainFilePath: string;
   onFileSelect: (fileId: string, filePath: string) => void;
+  onMainFileChange: (mainFilePath: string) => void;
   onFilesChanged: () => void;
   shareToken?: string | null;
   readOnly?: boolean;
@@ -170,12 +173,24 @@ async function collectDroppedFiles(
 interface ContextMenuProps {
   x: number;
   y: number;
+  canSetEntrypoint: boolean;
+  isEntrypoint: boolean;
+  onSetEntrypoint: () => void;
   onDelete: () => void;
   onRename: () => void;
   onClose: () => void;
 }
 
-function ContextMenu({ x, y, onDelete, onRename, onClose }: ContextMenuProps) {
+function ContextMenu({
+  x,
+  y,
+  canSetEntrypoint,
+  isEntrypoint,
+  onSetEntrypoint,
+  onDelete,
+  onRename,
+  onClose,
+}: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -194,6 +209,22 @@ function ContextMenu({ x, y, onDelete, onRename, onClose }: ContextMenuProps) {
       className="fixed z-50 min-w-[140px] rounded-lg border border-border bg-bg-secondary py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
+      {canSetEntrypoint && (
+        <button
+          type="button"
+          disabled={isEntrypoint}
+          onClick={onSetEntrypoint}
+          className={cn(
+            "flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors",
+            isEntrypoint
+              ? "cursor-default text-text-muted"
+              : "text-accent hover:bg-bg-elevated"
+          )}
+        >
+          <Flag className="h-4 w-4" />
+          {isEntrypoint ? "Current entrypoint" : "Set as entrypoint"}
+        </button>
+      )}
       <button
         type="button"
         onClick={onRename}
@@ -220,11 +251,12 @@ interface TreeNodeItemProps {
   node: TreeNode;
   depth: number;
   activeFileId: string | null;
+  mainFilePath: string;
   renamingFileId: string | null;
   dropTargetPath: string | null;
   onFileSelect: (fileId: string, filePath: string) => void;
   onDeleteFile: (fileId: string) => void;
-  onContextMenu: (e: React.MouseEvent, fileId: string) => void;
+  onContextMenu: (e: React.MouseEvent, file: ProjectFile) => void;
   onRenameSubmit: (fileId: string, oldPath: string, newName: string) => void;
   onRenameCancel: () => void;
   onDragStartInternal: (fileId: string, filePath: string) => void;
@@ -237,6 +269,7 @@ function TreeNodeItem({
   node,
   depth,
   activeFileId,
+  mainFilePath,
   renamingFileId,
   dropTargetPath,
   onFileSelect,
@@ -254,6 +287,7 @@ function TreeNodeItem({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isActive = node.file?.id === activeFileId;
   const isRenaming = node.file?.id === renamingFileId;
+  const isEntrypoint = !!node.file && !node.isDirectory && node.file.path === mainFilePath;
 
   useEffect(() => {
     if (isRenaming) {
@@ -289,7 +323,7 @@ function TreeNodeItem({
   function handleRightClick(e: React.MouseEvent) {
     e.preventDefault();
     if (node.file) {
-      onContextMenu(e, node.file.id);
+      onContextMenu(e, node.file);
     }
   }
 
@@ -385,7 +419,14 @@ function TreeNodeItem({
             className="w-full min-w-0 rounded border border-accent bg-bg-tertiary px-1 py-0 text-sm text-text-primary outline-none"
           />
         ) : (
-          <span className="truncate">{node.name}</span>
+          <>
+            <span className="min-w-0 flex-1 truncate">{node.name}</span>
+            {isEntrypoint && (
+              <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                Entry
+              </span>
+            )}
+          </>
         )}
       </button>
 
@@ -397,6 +438,7 @@ function TreeNodeItem({
               node={child}
               depth={depth + 1}
               activeFileId={activeFileId}
+              mainFilePath={mainFilePath}
               renamingFileId={renamingFileId}
               dropTargetPath={dropTargetPath}
               onFileSelect={onFileSelect}
@@ -430,7 +472,9 @@ export function FileTree({
   projectId,
   files,
   activeFileId,
+  mainFilePath,
   onFileSelect,
+  onMainFileChange,
   onFilesChanged,
   shareToken = null,
   readOnly = false,
@@ -440,7 +484,7 @@ export function FileTree({
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    fileId: string;
+    file: ProjectFile;
   } | null>(null);
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -480,13 +524,17 @@ export function FileTree({
           }
         );
         if (res.ok) {
+          const data = await res.json();
+          if (typeof data.mainFile === "string") {
+            onMainFileChange(data.mainFile);
+          }
           onFilesChanged();
         }
       } catch {
         // Silently fail
       }
     },
-    [onFilesChanged, projectId, withShareToken]
+    [onFilesChanged, onMainFileChange, projectId, withShareToken]
   );
 
   // ─── Internal drag-and-drop (move files between folders) ──
@@ -679,21 +727,54 @@ export function FileTree({
         );
 
         if (res.ok) {
+          const data = await res.json();
+          if (typeof data.mainFile === "string") {
+            onMainFileChange(data.mainFile);
+          }
           onFilesChanged();
         }
       } catch {
         // Silently fail
       }
     },
-    [onFilesChanged, projectId, withShareToken]
+    [onFilesChanged, onMainFileChange, projectId, withShareToken]
+  );
+
+  const handleSetEntrypoint = useCallback(
+    async (filePath: string) => {
+      try {
+        const res = await fetch(
+          withShareToken(`/api/projects/${projectId}/entrypoint`),
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mainFile: filePath }),
+          }
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          window.alert(data.error || "Failed to set entrypoint");
+          return;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        onMainFileChange(
+          typeof data.mainFile === "string" ? data.mainFile : filePath
+        );
+      } catch {
+        window.alert("Failed to set entrypoint");
+      }
+    },
+    [onMainFileChange, projectId, withShareToken]
   );
 
   // ─── Context menu handlers ───────────────────────
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent, fileId: string) => {
+    (e: React.MouseEvent, file: ProjectFile) => {
       e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, fileId });
+      setContextMenu({ x: e.clientX, y: e.clientY, file });
     },
     []
   );
@@ -814,6 +895,7 @@ export function FileTree({
             node={node}
             depth={0}
             activeFileId={activeFileId}
+            mainFilePath={mainFilePath}
             renamingFileId={renamingFileId}
             dropTargetPath={dropTargetPath}
             onFileSelect={onFileSelect}
@@ -834,12 +916,21 @@ export function FileTree({
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          canSetEntrypoint={
+            !contextMenu.file.isDirectory &&
+            contextMenu.file.path.toLowerCase().endsWith(".tex")
+          }
+          isEntrypoint={contextMenu.file.path === mainFilePath}
+          onSetEntrypoint={() => {
+            handleSetEntrypoint(contextMenu.file.path);
+            closeContextMenu();
+          }}
           onDelete={() => {
-            handleDeleteFile(contextMenu.fileId);
+            handleDeleteFile(contextMenu.file.id);
             closeContextMenu();
           }}
           onRename={() => {
-            setRenamingFileId(contextMenu.fileId);
+            setRenamingFileId(contextMenu.file.id);
             closeContextMenu();
           }}
           onClose={closeContextMenu}

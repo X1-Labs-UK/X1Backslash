@@ -129,6 +129,7 @@ export function EditorLayout({
 
   const [currentUser, setCurrentUser] = useState<CurrentUser>(initialCurrentUser);
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
+  const [mainFilePath, setMainFilePath] = useState(project.mainFile);
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeFileContent, setActiveFileContent] = useState<string>("");
@@ -1074,11 +1075,16 @@ export function EditorLayout({
       if (res.ok) {
         const data = await res.json();
         setFiles(data.files);
+        if (typeof data.mainFile === "string" && data.mainFile !== mainFilePath) {
+          setMainFilePath(data.mainFile);
+          setPdfUrl(null);
+          setBuildStatus((prev) => (prev === "success" ? "idle" : prev));
+        }
       }
     } catch {
       // Silently fail
     }
-  }, [project.id, withShareToken]);
+  }, [mainFilePath, project.id, withShareToken]);
 
   const isImageFile = useCallback(
     (fileId: string | null): boolean => {
@@ -1198,7 +1204,7 @@ export function EditorLayout({
     }
     if (files.length === 0) return;
 
-    const mainFile = files.find((f) => f.path === project.mainFile);
+    const mainFile = files.find((f) => f.path === mainFilePath);
     if (mainFile) {
       autoOpenedMainRef.current = true;
       handleFileSelect(mainFile.id, mainFile.path);
@@ -1210,7 +1216,7 @@ export function EditorLayout({
       autoOpenedMainRef.current = true;
       handleFileSelect(fallbackTex.id, fallbackTex.path);
     }
-  }, [activeFileId, files, handleFileSelect, openFiles.length, project.mainFile]);
+  }, [activeFileId, files, handleFileSelect, mainFilePath, openFiles.length]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1229,7 +1235,7 @@ export function EditorLayout({
         compiling={compiling}
         onCompile={handleCompile}
         autoCompileEnabled={autoCompileEnabled}
-        onAutoCompileToggle={() => setAutoCompileEnabled((prev) => !prev)}
+        onAutoCompileToggle={(enabled) => setAutoCompileEnabled(enabled)}
         buildStatus={buildStatus}
         onCancelBuild={handleCancelBuild}
         presenceUsers={presenceUsers}
@@ -1264,7 +1270,13 @@ export function EditorLayout({
                   projectId={project.id}
                   files={files}
                   activeFileId={activeFileId}
+                  mainFilePath={mainFilePath}
                   onFileSelect={handleFileSelect}
+                  onMainFileChange={(nextMainFilePath) => {
+                    setMainFilePath(nextMainFilePath);
+                    setPdfUrl(null);
+                    setBuildStatus((prev) => (prev === "success" ? "idle" : prev));
+                  }}
                   onFilesChanged={refreshFiles}
                   shareToken={shareToken}
                   readOnly={!canEdit}

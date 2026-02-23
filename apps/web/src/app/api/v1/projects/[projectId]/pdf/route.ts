@@ -5,6 +5,16 @@ import * as storage from "@/lib/storage";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
+function buildDownloadPdfName(projectName: string): string {
+  const safeProjectName =
+    projectName
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "project";
+  const unixEpoch = Math.floor(Date.now() / 1000);
+  return `${safeProjectName}-${unixEpoch}.pdf`;
+}
+
 // ─── GET /api/v1/projects/[projectId]/pdf ───────────
 // Download the compiled PDF for a project.
 
@@ -40,7 +50,7 @@ export async function GET(
       }
 
       const pdfBuffer = await storage.readFileBinary(pdfPath);
-      const pdfName = project.mainFile.replace(/\.tex$/, ".pdf");
+      const pdfName = buildDownloadPdfName(project.name);
 
       return new NextResponse(new Uint8Array(pdfBuffer), {
         status: 200,

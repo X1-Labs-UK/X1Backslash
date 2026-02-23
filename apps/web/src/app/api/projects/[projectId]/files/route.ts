@@ -30,7 +30,7 @@ export async function GET(
       .from(projectFiles)
       .where(eq(projectFiles.projectId, projectId));
 
-    return NextResponse.json({ files });
+    return NextResponse.json({ files, mainFile: access.project.mainFile });
   } catch (error) {
     console.error("Error listing files:", error);
     return NextResponse.json(
