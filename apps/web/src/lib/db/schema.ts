@@ -206,6 +206,40 @@ export const apiKeys = pgTable(
   ]
 );
 
+// ─── User AI Settings ──────────────────────────────
+
+export const userAiSettings = pgTable(
+  "user_ai_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    buildProvider: varchar("build_provider", { length: 32 })
+      .default("openai")
+      .notNull(),
+    buildModel: varchar("build_model", { length: 255 })
+      .default("gpt-4o-mini")
+      .notNull(),
+    buildEndpoint: text("build_endpoint"),
+    buildApiKey: text("build_api_key"),
+    writerProvider: varchar("writer_provider", { length: 32 })
+      .default("openai")
+      .notNull(),
+    writerModel: varchar("writer_model", { length: 255 })
+      .default("gpt-4o-mini")
+      .notNull(),
+    writerEndpoint: text("writer_endpoint"),
+    writerApiKey: text("writer_api_key"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_ai_settings_user_idx").on(table.userId),
+    index("user_ai_settings_provider_idx").on(table.buildProvider, table.writerProvider),
+  ]
+);
+
 // ─── Project Shares (Collaboration) ─────────────────
 
 export const projectShares = pgTable(
@@ -261,7 +295,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   builds: many(builds),
   apiKeys: many(apiKeys),
   sharedProjects: many(projectShares),
-  labels: many(labels)
+  labels: many(labels),
+  aiSettings: many(userAiSettings),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -277,7 +312,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   labels: many(projectLabels),
 }));
 
-export const projectFilesRelations = relations(projectFiles, ({ one, many }) => ({
+export const projectFilesRelations = relations(projectFiles, ({ one }) => ({
   project: one(projects, {
     fields: [projectFiles.projectId],
     references: [projects.id],
@@ -294,6 +329,10 @@ export const buildsRelations = relations(builds, ({ one }) => ({
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
+}));
+
+export const userAiSettingsRelations = relations(userAiSettings, ({ one }) => ({
+  user: one(users, { fields: [userAiSettings.userId], references: [users.id] }),
 }));
 
 export const projectSharesRelations = relations(projectShares, ({ one }) => ({

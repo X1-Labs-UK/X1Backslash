@@ -160,6 +160,8 @@ export function EditorLayout({
   );
   const [buildActorName, setBuildActorName] = useState<string | null>(null);
   const [buildErrors, setBuildErrors] = useState<LogError[]>([]);
+  const [aiFixExplanation, setAiFixExplanation] = useState<string | null>(null);
+  const [fixingWithAi, setFixingWithAi] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
 
   // Disable auto-compile if last build failed (prevents rebuild loop on refresh)
@@ -962,6 +964,7 @@ export function EditorLayout({
     if (!canEdit) return;
     if (compilingRef.current) return;
 
+    setAiFixExplanation(null);
     saveViewPositionsBeforeBuild();
     compilingRef.current = true;
     pendingRecompileRef.current = false;
@@ -993,6 +996,114 @@ export function EditorLayout({
     saveViewPositionsBeforeBuild,
     startBuildPolling,
     withShareToken,
+  ]);
+
+  const handleFixWithAi = useCallback(async () => {
+    if (!canEdit) return;
+    if (fixingWithAi) return;
+    if (compilingRef.current) return;
+
+    const activeFilePath =
+      activeFileId
+        ? files.find((file) => file.id === activeFileId)?.path ?? mainFilePath
+        : mainFilePath;
+
+    setFixingWithAi(true);
+    setAiFixExplanation(null);
+    setBuildActorName("You");
+    setBuildStatus("queued");
+    setBuildErrors([]);
+    setPdfLoading(true);
+    setCompiling(true);
+    compilingRef.current = true;
+    pendingRecompileRef.current = false;
+    saveViewPositionsBeforeBuild();
+
+    try {
+      // Persist current editor buffer before requesting AI fixes.
+      if (activeFileId) {
+        await handleSave(activeFileContent, false);
+      }
+
+      const res = await fetch("/api/ai/fix-build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          activeFilePath,
+          activeFileContent,
+          errorLimit: 8,
+          recentBuildLimit: 3,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBuildStatus("error");
+        setBuildLogs(data.error || "AI fix failed");
+        resetCompileState();
+        return;
+      }
+
+      if (typeof data.explanation === "string" && data.explanation.trim().length > 0) {
+        setAiFixExplanation(data.explanation);
+      }
+
+      const compileStatusCode =
+        typeof data.compile?.statusCode === "number" ? data.compile.statusCode : 500;
+      if (compileStatusCode >= 400) {
+        setBuildStatus("error");
+        const compileError =
+          typeof data.compile?.result?.error === "string"
+            ? data.compile.result.error
+            : "AI fixes were applied, but compile could not be queued.";
+        setBuildLogs(compileError);
+        resetCompileState();
+        return;
+      }
+
+      const touchedFilePaths = new Set<string>(
+        Array.isArray(data.appliedEdits)
+          ? data.appliedEdits
+              .map((edit: { filePath?: string }) => edit.filePath)
+              .filter((filePath: unknown): filePath is string => typeof filePath === "string")
+          : []
+      );
+
+      if (touchedFilePaths.size > 0) {
+        touchedFilePaths.forEach((filePath) => {
+          const touched = files.find((file) => file.path === filePath);
+          if (!touched) return;
+          fileContentsRef.current.delete(touched.id);
+          savedContentRef.current.delete(touched.id);
+        });
+      }
+
+      if (activeFileId) {
+        fetchFileContent(activeFileId);
+      }
+
+      startBuildPolling();
+    } catch {
+      setBuildStatus("error");
+      setBuildLogs("AI fix failed. Please try again.");
+      resetCompileState();
+    } finally {
+      setFixingWithAi(false);
+    }
+  }, [
+    activeFileContent,
+    activeFileId,
+    canEdit,
+    fetchFileContent,
+    files,
+    fixingWithAi,
+    handleSave,
+    mainFilePath,
+    project.id,
+    resetCompileState,
+    saveViewPositionsBeforeBuild,
+    startBuildPolling,
   ]);
 
   const handleCancelBuild = useCallback(async () => {
@@ -1375,6 +1486,10 @@ export function EditorLayout({
               errors={buildErrors}
               actorName={buildActorName}
               onErrorClick={handleErrorClick}
+              canFixWithAi={canEdit && !shareToken}
+              fixingWithAi={fixingWithAi}
+              onFixWithAi={handleFixWithAi}
+              aiExplanation={aiFixExplanation}
             />
           </Panel>
         </PanelGroup>

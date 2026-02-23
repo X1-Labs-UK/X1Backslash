@@ -10,6 +10,7 @@ import {
   Ban,
   ChevronUp,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────
@@ -28,6 +29,10 @@ interface BuildLogsProps {
   errors: LogError[];
   actorName?: string | null;
   onErrorClick?: (file: string, line: number) => void;
+  canFixWithAi?: boolean;
+  fixingWithAi?: boolean;
+  onFixWithAi?: () => void;
+  aiExplanation?: string | null;
 }
 
 // ─── Helpers ────────────────────────────────────────
@@ -83,6 +88,10 @@ export function BuildLogs({
   errors,
   actorName = null,
   onErrorClick,
+  canFixWithAi = false,
+  fixingWithAi = false,
+  onFixWithAi,
+  aiExplanation = null,
 }: BuildLogsProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -94,11 +103,7 @@ export function BuildLogs({
   return (
     <div className="flex h-full flex-col bg-bg-secondary">
       {/* Status bar -- always visible */}
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-between border-b border-border px-4 py-1.5 transition-colors hover:bg-bg-elevated/50"
-      >
+      <div className="flex items-center justify-between border-b border-border px-4 py-1.5 transition-colors hover:bg-bg-elevated/50">
         <div className="flex items-center gap-3">
           {getStatusIcon(status)}
           <span className="text-xs font-medium text-text-secondary">
@@ -129,18 +134,48 @@ export function BuildLogs({
           )}
         </div>
 
-        <div className="flex items-center text-text-muted">
-          {expanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          {canFixWithAi && onFixWithAi && (status === "error" || status === "timeout") && (
+            <button
+              type="button"
+              onClick={onFixWithAi}
+              disabled={fixingWithAi}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-tertiary px-2 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {fixingWithAi ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3 text-accent" />
+              )}
+              {fixingWithAi ? "Fixing..." : "Fix with AI"}
+            </button>
           )}
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center text-text-muted"
+          >
+            {expanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronUp className="h-4 w-4" />
+            )}
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded content */}
       {expanded && (
         <div className="flex-1 min-h-0 overflow-auto">
+          {aiExplanation && (
+            <div className="border-b border-border bg-accent/5 px-4 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-accent">
+                AI Fix Summary
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">{aiExplanation}</p>
+            </div>
+          )}
+
           {/* Error/warning entries */}
           {errors.length > 0 && (
             <div className="border-b border-border">
