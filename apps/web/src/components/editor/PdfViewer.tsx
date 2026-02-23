@@ -357,7 +357,7 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
         </div>
 
         {/* PDF Content */}
-        <div ref={containerRef} className="relative flex-1 overflow-auto">
+        <div className="relative flex-1">
           {loading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg-tertiary/80">
               <div className="flex flex-col items-center gap-2 animate-fade-in">
@@ -367,67 +367,69 @@ export const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function Pd
             </div>
           )}
 
-          {!pdfUrl && !loading && (
-            <div className="flex h-full items-center justify-center animate-fade-in">
-              <div className="flex flex-col items-center gap-3 text-center px-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-elevated">
-                  <FileText className="h-7 w-7 text-text-muted" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-secondary">
-                    No PDF preview
-                  </p>
-                  <p className="mt-1 text-xs text-text-muted">
-                    Hit Compile or enable auto-compile to generate a PDF
-                  </p>
+          <div ref={containerRef} className="h-full overflow-auto">
+            {!pdfUrl && !loading && (
+              <div className="flex h-full items-center justify-center animate-fade-in">
+                <div className="flex flex-col items-center gap-3 px-4 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-elevated">
+                    <FileText className="h-7 w-7 text-text-muted" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-text-secondary">
+                      No PDF preview
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Hit Compile or enable auto-compile to generate a PDF
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {pdfUrl && (
-            <div className="py-4">
-              <Document
-                key={`pdf-document-${documentVersion}`}
-                file={pdfUrl}
-                onLoadSuccess={onDocumentLoadSuccess}
-                loading={
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-accent" />
-                  </div>
-                }
-                error={
-                  <div className="flex items-center justify-center py-12">
-                    <p className="text-sm text-error">Failed to load PDF</p>
-                  </div>
-                }
-              >
-                {Array.from(new Array(numPages), (_, index) => {
-                  const pageNum = index + 1;
-                  return (
-                    <div
-                      key={`page_${pageNum}`}
-                      ref={(el) => setPageRef(pageNum, el)}
-                      data-page-number={pageNum}
-                      className="mb-3 flex justify-center"
-                    >
-                      <Page
-                        pageNumber={pageNum}
-                        width={pageWidth}
-                        devicePixelRatio={
-                          typeof window !== "undefined"
-                            ? Math.max(window.devicePixelRatio || 1, 2)
-                            : 2
-                        }
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                      />
+            {pdfUrl && (
+              <div className="py-4">
+                <Document
+                  key={`pdf-document-${documentVersion}`}
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  loading={
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-accent" />
                     </div>
-                  );
-                })}
-              </Document>
-            </div>
-          )}
+                  }
+                  error={
+                    <div className="flex items-center justify-center py-12">
+                      <p className="text-sm text-error">Failed to load PDF</p>
+                    </div>
+                  }
+                >
+                  {Array.from(new Array(numPages), (_, index) => {
+                    const pageNum = index + 1;
+                    return (
+                      <div
+                        key={`page_${pageNum}`}
+                        ref={(el) => setPageRef(pageNum, el)}
+                        data-page-number={pageNum}
+                        className="mb-3 flex justify-center"
+                      >
+                        <Page
+                          pageNumber={pageNum}
+                          width={pageWidth}
+                          devicePixelRatio={
+                            typeof window !== "undefined"
+                              ? Math.max(window.devicePixelRatio || 1, 2)
+                              : 2
+                          }
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                        />
+                      </div>
+                    );
+                  })}
+                </Document>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </TooltipProvider>
