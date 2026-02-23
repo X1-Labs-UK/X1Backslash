@@ -1,9 +1,8 @@
 import {db} from "@/lib/db";
-import {labels, projectLabels, projects} from "@/lib/db/schema";
+import {labels, projectLabels} from "@/lib/db/schema";
 import {withAuth} from "@/lib/auth/middleware";
 import {eq, and} from "drizzle-orm";
 import {NextRequest, NextResponse} from "next/server";
-import { Label } from "@radix-ui/react-dropdown-menu";
 
 // ─── PUT /api/labels/detach ────────────────────────────
 // Detach an existing label to a project.
@@ -17,7 +16,14 @@ export async function PUT(request: NextRequest) {
                 typeof body?.projectId === "string" ? body.projectId.trim() : "";
 
             const labelId: string =
-                typeof body?.labelId === "string" ? body.projectId.trim() : "";
+                typeof body?.labelId === "string" ? body.labelId.trim() : "";
+
+            if (!projectId || !labelId) {
+                return NextResponse.json(
+                    {error: "projectId and labelId are required"},
+                    {status: 400}
+                );
+            }
 
             // Check if label is already attached to the project
             const [existing] = await db

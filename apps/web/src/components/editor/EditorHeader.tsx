@@ -8,8 +8,6 @@ import {
   FileArchive,
   Loader2,
   Square,
-  Zap,
-  ZapOff,
   CheckCircle2,
   XCircle,
   Share2,
@@ -50,7 +48,7 @@ interface EditorHeaderProps {
   compiling: boolean;
   onCompile: () => void;
   autoCompileEnabled: boolean;
-  onAutoCompileToggle: () => void;
+  onAutoCompileToggle: (enabled: boolean) => void;
   buildStatus: string;
   onCancelBuild?: () => void;
   presenceUsers?: PresenceUser[];
@@ -323,19 +321,25 @@ export function EditorHeader({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={onAutoCompileToggle}
+                role="switch"
+                aria-checked={autoCompileEnabled}
+                aria-label="Toggle auto-compile"
+                onClick={() => onAutoCompileToggle(!autoCompileEnabled)}
                 className={cn(
-                  "rounded-md p-1.5 transition-colors",
+                  "relative inline-flex h-5 w-10 items-center rounded-md border transition-colors",
                   autoCompileEnabled
-                    ? "text-accent bg-accent/10 hover:bg-accent/20"
-                    : "text-text-muted hover:text-text-secondary hover:bg-bg-elevated"
+                    ? "border-accent/70 bg-accent/25"
+                    : "border-border bg-bg-tertiary"
                 )}
               >
-                {autoCompileEnabled ? (
-                  <Zap className="h-4 w-4" />
-                ) : (
-                  <ZapOff className="h-4 w-4" />
-                )}
+                <span
+                  className={cn(
+                    "inline-block h-4 w-4 rounded-sm transition-all",
+                    autoCompileEnabled
+                      ? "translate-x-5 bg-accent shadow-sm shadow-accent/30"
+                      : "translate-x-0.5 bg-bg-primary"
+                  )}
+                />
               </button>
             </TooltipTrigger>
             <TooltipContent>

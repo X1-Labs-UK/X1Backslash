@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import {
   User,
+  Settings,
   LogOut,
   LayoutDashboard,
   Key,
@@ -170,11 +171,11 @@ export function AppHeader({ children, leftContent, className }: AppHeaderProps) 
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  window.location.href = "/dashboard/profile";
+                  window.location.href = "/dashboard/settings";
                 }}
               >
-                <User className="h-4 w-4" />
-                <span>Profile</span>
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout}>

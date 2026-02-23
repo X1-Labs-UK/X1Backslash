@@ -16,6 +16,7 @@ import {
   Download,
   ListOrdered,
   Tag,
+  Sparkles,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────
@@ -256,6 +257,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
 function getSections(origin: string): EndpointSection[] {
   const BASE = `${origin}/api/v1`;
+  const APP_BASE = `${origin}/api`;
 
   return [
   {
@@ -844,6 +846,123 @@ curl "${BASE}/compile/JOB_ID/output?format=pdf" \\
       },
     ],
   },
+  {
+    title: "AI Assistant (Session)",
+    icon: <Sparkles className="h-5 w-5" />,
+    description:
+      "Dashboard-only AI endpoints for per-user model settings and build fixes. These use session auth, not API keys.",
+    endpoints: [
+      {
+        method: "GET",
+        path: `${APP_BASE}/ai/settings`,
+        description: "Get current AI settings for the signed-in user.",
+        auth: true,
+        response: `{
+  "settings": {
+    "enabled": true,
+    "buildFix": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "endpoint": null,
+      "apiKeySet": true
+    },
+    "latexWriter": {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "endpoint": null,
+      "apiKeySet": false
+    }
+  }
+}`,
+        notes:
+          "Requires a signed-in dashboard session cookie. API key auth is not supported for this endpoint.",
+      },
+      {
+        method: "PUT",
+        path: `${APP_BASE}/ai/settings`,
+        description:
+          "Update AI enabled flag and model/provider config for build fixes and LaTeX writing.",
+        auth: true,
+        body: {
+          enabled: {
+            type: "boolean",
+            required: false,
+            description:
+              "Enable/disable AI features for this account. If false, AI fix endpoint returns 403.",
+          },
+          buildFix: {
+            type: "object",
+            required: true,
+            description:
+              "Model config used by Fix with AI in build logs (provider, model, optional endpoint/apiKey).",
+          },
+          latexWriter: {
+            type: "object",
+            required: true,
+            description:
+              "Model config used for LaTeX writing assistance (provider, model, optional endpoint/apiKey).",
+          },
+        },
+        curl: `curl -X PUT ${APP_BASE}/ai/settings \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "enabled": true,
+    "buildFix": { "provider": "openai", "model": "gpt-4o-mini", "endpoint": null },
+    "latexWriter": { "provider": "anthropic", "model": "claude-3-5-sonnet-latest", "endpoint": null }
+  }'`,
+        notes:
+          "Provider options: openai, openrouter, anthropic, custom. Custom provider requires endpoint.",
+      },
+      {
+        method: "POST",
+        path: `${APP_BASE}/ai/fix-build`,
+        description:
+          "Generate strict-JSON line edits from recent compile errors/logs, apply edits via file API, then queue compile.",
+        auth: true,
+        body: {
+          projectId: {
+            type: "string (uuid)",
+            required: true,
+            description: "Project to fix.",
+          },
+          activeFilePath: {
+            type: "string",
+            required: false,
+            description:
+              "Active file path hint for the LLM context. Falls back to project main file if omitted.",
+          },
+          activeFileContent: {
+            type: "string",
+            required: false,
+            description:
+              "Optional unsaved active editor content to include in prompt context.",
+          },
+          errorLimit: {
+            type: "number",
+            required: false,
+            description: "Top compile errors to send to model (1-20, default 8).",
+          },
+          recentBuildLimit: {
+            type: "number",
+            required: false,
+            description:
+              "Recent build logs to include for context (1-5, default 3).",
+          },
+        },
+        response: `{
+  "explanation": "Added missing package and fixed undefined command in main.tex.",
+  "appliedEdits": [{ "filePath": "main.tex", "replaceFrom": 12, "replaceTo": 12 }],
+  "skippedEdits": [],
+  "compile": {
+    "statusCode": 202,
+    "result": { "buildId": "uuid", "status": "queued" }
+  }
+}`,
+        notes:
+          "Requires editor/owner access and AI enabled in settings. Viewers are denied. API key auth is not supported for this endpoint.",
+      },
+    ],
+  },
   ];
 }
 
@@ -851,7 +970,7 @@ curl "${BASE}/compile/JOB_ID/output?format=pdf" \\
 
 function TableOfContents({ sections }: { sections: EndpointSection[] }) {
   return (
-    <nav className="hidden lg:block sticky top-24 w-56 shrink-0">
+    <nav className="hidden lg:block w-56 shrink-0 self-start sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
       <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">
         On this page
       </h3>
@@ -899,7 +1018,7 @@ export default function ApiDocsPage() {
   const sections = useMemo(() => getSections(origin), [origin]);
 
   return (
-    <div className="flex gap-8">
+    <div className="flex items-start gap-8">
       {/* Main content */}
       <div className="flex-1 min-w-0">
         {/* Back link & heading */}
@@ -916,20 +1035,37 @@ export default function ApiDocsPage() {
         </h1>
         <p className="text-text-secondary mb-8">
           The Backslash API lets you compile LaTeX documents, manage projects,
-          and upload files programmatically. All endpoints require API key
-          authentication.
+          and upload files programmatically. Public API endpoints use API key
+          auth, while dashboard AI endpoints use session auth.
         </p>
 
         {/* Base URL */}
-        <div className="rounded-lg border border-border bg-bg-secondary p-4 mb-8">
+        <div className="rounded-lg border border-border bg-bg-secondary p-4 mb-8 space-y-3">
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">
-            Base URL
+            Base URLs
           </h3>
-          <code className="text-sm font-mono text-accent">
-            {typeof window !== "undefined"
-              ? `${window.location.origin}/api/v1`
-              : "https://your-instance.com/api/v1"}
-          </code>
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs text-text-muted mb-1">
+                Public API (API key auth)
+              </p>
+              <code className="text-sm font-mono text-accent">
+                {typeof window !== "undefined"
+                  ? `${window.location.origin}/api/v1`
+                  : "https://your-instance.com/api/v1"}
+              </code>
+            </div>
+            <div>
+              <p className="text-xs text-text-muted mb-1">
+                Dashboard endpoints (session auth)
+              </p>
+              <code className="text-sm font-mono text-accent">
+                {typeof window !== "undefined"
+                  ? `${window.location.origin}/api`
+                  : "https://your-instance.com/api"}
+              </code>
+            </div>
+          </div>
         </div>
 
         {/* Authentication */}
@@ -938,7 +1074,11 @@ export default function ApiDocsPage() {
             Authentication
           </h2>
           <p className="text-sm text-text-secondary mb-4">
-            All API requests must include your API key in the{" "}
+            Public endpoints under{" "}
+            <code className="text-accent font-mono text-xs bg-bg-elevated px-1.5 py-0.5 rounded">
+              /api/v1
+            </code>{" "}
+            must include your API key in the{" "}
             <code className="text-accent font-mono text-xs bg-bg-elevated px-1.5 py-0.5 rounded">
               Authorization
             </code>{" "}
@@ -948,6 +1088,13 @@ export default function ApiDocsPage() {
             <CopyButton text='Authorization: Bearer bs_YOUR_API_KEY' />
             <pre>Authorization: Bearer bs_YOUR_API_KEY</pre>
           </div>
+          <p className="text-sm text-text-secondary mb-4">
+            Dashboard endpoints under{" "}
+            <code className="text-accent font-mono text-xs bg-bg-elevated px-1.5 py-0.5 rounded">
+              /api/ai
+            </code>{" "}
+            use signed session cookies (web login) and do not accept API keys.
+          </p>
           <p className="text-sm text-text-secondary">
             API keys can be created and managed in your{" "}
             <Link
