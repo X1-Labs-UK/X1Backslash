@@ -23,6 +23,7 @@ const modelConfigSchema = z.object({
 });
 
 const settingsSchema = z.object({
+  enabled: z.boolean().optional(),
   buildFix: modelConfigSchema,
   latexWriter: modelConfigSchema,
 });
@@ -85,6 +86,7 @@ export async function PUT(request: NextRequest) {
     try {
       const existing = await getUserAiSettings(user.id);
       const next = {
+        enabled: parsed.data.enabled ?? existing.enabled,
         buildFix: normalizeModelConfig(parsed.data.buildFix, existing.buildFix),
         latexWriter: normalizeModelConfig(
           parsed.data.latexWriter,

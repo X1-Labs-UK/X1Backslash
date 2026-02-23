@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Key,
   Plus,
   Trash2,
@@ -74,6 +81,7 @@ interface CreateKeyDialogProps {
 }
 
 function CreateKeyDialog({ open, onClose, onCreated }: CreateKeyDialogProps) {
+  const NO_EXPIRY_VALUE = "__no_expiry__";
   const [name, setName] = useState("");
   const [expiresInDays, setExpiresInDays] = useState<string>("");
   const [creating, setCreating] = useState(false);
@@ -242,19 +250,24 @@ function CreateKeyDialog({ open, onClose, onCreated }: CreateKeyDialogProps) {
                     (optional)
                   </span>
                 </label>
-                <select
-                  id="key-expiry"
-                  value={expiresInDays}
-                  onChange={(e) => setExpiresInDays(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                <Select
+                  value={expiresInDays || NO_EXPIRY_VALUE}
+                  onValueChange={(value) =>
+                    setExpiresInDays(value === NO_EXPIRY_VALUE ? "" : value)
+                  }
                 >
-                  <option value="">No expiration</option>
-                  <option value="7">7 days</option>
-                  <option value="30">30 days</option>
-                  <option value="90">90 days</option>
-                  <option value="180">180 days</option>
-                  <option value="365">1 year</option>
-                </select>
+                  <SelectTrigger id="key-expiry" className="w-full">
+                    <SelectValue placeholder="No expiration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_EXPIRY_VALUE}>No expiration</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="30">30 days</SelectItem>
+                    <SelectItem value="90">90 days</SelectItem>
+                    <SelectItem value="180">180 days</SelectItem>
+                    <SelectItem value="365">1 year</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">

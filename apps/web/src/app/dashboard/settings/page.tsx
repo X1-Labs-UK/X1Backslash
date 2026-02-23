@@ -3,6 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Loader2, Check, AlertCircle, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type AiProvider = "openai" | "openrouter" | "anthropic" | "custom";
 
@@ -23,6 +31,7 @@ interface AiModelFormState {
 
 interface AiSettingsResponse {
   settings: {
+    enabled: boolean;
     buildFix: {
       provider: AiProvider;
       model: string;
@@ -75,6 +84,7 @@ export default function SettingsPage() {
   const [buildFixModel, setBuildFixModel] = useState<AiModelFormState>(
     defaultAiModelState()
   );
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [latexWriterModel, setLatexWriterModel] = useState<AiModelFormState>(
     defaultAiModelState()
   );
@@ -99,6 +109,7 @@ export default function SettingsPage() {
 
         if (aiRes.ok) {
           const aiData = (await aiRes.json()) as AiSettingsResponse;
+          setAiEnabled(aiData.settings.enabled);
           setBuildFixModel({
             provider: aiData.settings.buildFix.provider,
             model: aiData.settings.buildFix.model,
@@ -184,6 +195,7 @@ export default function SettingsPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          enabled: aiEnabled,
           buildFix: buildFixPayload,
           latexWriter: latexWriterPayload,
         }),
@@ -196,6 +208,7 @@ export default function SettingsPage() {
       }
 
       const saved = payload.settings as AiSettingsResponse["settings"];
+      setAiEnabled(saved.enabled);
       setBuildFixModel((prev) => ({
         ...prev,
         provider: saved.buildFix.provider,
@@ -347,6 +360,43 @@ export default function SettingsPage() {
         )}
 
         <form onSubmit={saveAiSettings} className="space-y-6">
+          <div className="rounded-lg border border-border bg-bg-secondary p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Enable AI Features
+                </h3>
+                <p className="mt-1 text-xs text-text-muted">
+                  Controls AI actions globally, including “Fix with AI” in build
+                  logs.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={aiEnabled}
+                aria-label="Toggle AI features"
+                onClick={() => setAiEnabled((prev) => !prev)}
+                className={cn(
+                  "relative inline-flex h-6 w-11 items-center rounded-md border transition-colors",
+                  aiEnabled
+                    ? "border-accent/70 bg-accent/25"
+                    : "border-border bg-bg-tertiary"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-5 w-5 rounded-sm transition-all",
+                    aiEnabled
+                      ? "translate-x-5 bg-accent shadow-sm shadow-accent/30"
+                      : "translate-x-0.5 bg-bg-primary"
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-lg border border-border bg-bg-secondary p-4 space-y-4">
               <div>
@@ -362,21 +412,25 @@ export default function SettingsPage() {
                 <label className="mb-1.5 block text-sm font-medium text-text-secondary">
                   Provider
                 </label>
-                <select
+                <Select
                   value={buildFixModel.provider}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setBuildFixModel((prev) => ({
                       ...prev,
-                      provider: e.target.value as AiProvider,
+                      provider: value as AiProvider,
                     }))
                   }
-                  className="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
                 >
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="custom">Custom endpoint</option>
-                </select>
+                  <SelectTrigger className="w-full bg-bg-primary">
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                    <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="custom">Custom endpoint</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -461,21 +515,25 @@ export default function SettingsPage() {
                 <label className="mb-1.5 block text-sm font-medium text-text-secondary">
                   Provider
                 </label>
-                <select
+                <Select
                   value={latexWriterModel.provider}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setLatexWriterModel((prev) => ({
                       ...prev,
-                      provider: e.target.value as AiProvider,
+                      provider: value as AiProvider,
                     }))
                   }
-                  className="w-full rounded-lg border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
                 >
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="custom">Custom endpoint</option>
-                </select>
+                  <SelectTrigger className="w-full bg-bg-primary">
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                    <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="custom">Custom endpoint</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

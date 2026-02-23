@@ -44,6 +44,7 @@ function defaultModelFor(provider: AiProvider, purpose: AiPurpose): string {
 export function defaultAiSettings(): UserAiSettings {
   const defaultProvider: AiProvider = "openai";
   return {
+    enabled: true,
     buildFix: {
       provider: defaultProvider,
       model: defaultModelFor(defaultProvider, "buildFix"),
@@ -73,6 +74,7 @@ function rowToSettings(row: UserAiSettingsRow | null): UserAiSettings {
     : defaults.latexWriter.provider;
 
   return {
+    enabled: row.aiEnabled ?? true,
     buildFix: {
       provider: buildProvider,
       model: row.buildModel?.trim() || defaultModelFor(buildProvider, "buildFix"),
@@ -113,6 +115,7 @@ export async function upsertUserAiSettings(
     .insert(userAiSettings)
     .values({
       userId,
+      aiEnabled: settings.enabled,
       buildProvider: settings.buildFix.provider,
       buildModel: settings.buildFix.model,
       buildEndpoint: normalizeNullable(settings.buildFix.endpoint),
@@ -126,6 +129,7 @@ export async function upsertUserAiSettings(
     .onConflictDoUpdate({
       target: userAiSettings.userId,
       set: {
+        aiEnabled: settings.enabled,
         buildProvider: settings.buildFix.provider,
         buildModel: settings.buildFix.model,
         buildEndpoint: normalizeNullable(settings.buildFix.endpoint),
@@ -144,6 +148,7 @@ export async function upsertUserAiSettings(
 
 export function toPublicAiSettings(settings: UserAiSettings): PublicUserAiSettings {
   return {
+    enabled: settings.enabled,
     buildFix: {
       provider: settings.buildFix.provider,
       model: settings.buildFix.model,

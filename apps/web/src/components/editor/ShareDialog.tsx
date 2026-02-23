@@ -13,6 +13,13 @@ import {
   Globe,
   Clock3,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ShareRole = "viewer" | "editor";
 type ExpiryOption = "30m" | "7d" | "never";
@@ -294,23 +301,31 @@ export function ShareDialog({
                   required
                   className="min-w-[220px] flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
                 />
-                <select
+                <Select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as ShareRole)}
-                  className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                  onValueChange={(value) => setRole(value as ShareRole)}
                 >
-                  <option value="editor">Editor</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-                <select
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="editor">Editor</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
                   value={inviteExpiry}
-                  onChange={(e) => setInviteExpiry(e.target.value as ExpiryOption)}
-                  className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                  onValueChange={(value) => setInviteExpiry(value as ExpiryOption)}
                 >
-                  <option value="30m">30 min</option>
-                  <option value="7d">7 days</option>
-                  <option value="never">No expiry</option>
-                </select>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="Expiry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30m">30 min</SelectItem>
+                    <SelectItem value="7d">7 days</SelectItem>
+                    <SelectItem value="never">No expiry</SelectItem>
+                  </SelectContent>
+                </Select>
                 <button
                   type="submit"
                   disabled={inviting || !email.trim()}
@@ -346,23 +361,31 @@ export function ShareDialog({
 
               {publicEnabled && (
                 <div className="mb-3 flex flex-wrap gap-2">
-                  <select
+                  <Select
                     value={publicRole}
-                    onChange={(e) => setPublicRole(e.target.value as ShareRole)}
-                    className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                    onValueChange={(value) => setPublicRole(value as ShareRole)}
                   >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                  </select>
-                  <select
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
                     value={publicExpiry}
-                    onChange={(e) => setPublicExpiry(e.target.value as ExpiryOption)}
-                    className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                    onValueChange={(value) => setPublicExpiry(value as ExpiryOption)}
                   >
-                    <option value="30m">30 min</option>
-                    <option value="7d">7 days</option>
-                    <option value="never">No expiry</option>
-                  </select>
+                    <SelectTrigger className="w-[130px]">
+                      <SelectValue placeholder="Expiry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30m">30 min</SelectItem>
+                      <SelectItem value="7d">7 days</SelectItem>
+                      <SelectItem value="never">No expiry</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -455,16 +478,20 @@ export function ShareDialog({
 
               {isOwner ? (
                 <div className="flex items-center gap-1.5">
-                  <select
+                  <Select
                     value={collab.role}
-                    onChange={(e) =>
-                      handleRoleChange(collab.id, e.target.value as ShareRole)
+                    onValueChange={(value) =>
+                      handleRoleChange(collab.id, value as ShareRole)
                     }
-                    className="rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs text-text-secondary outline-none focus:border-accent"
                   >
-                    <option value="editor">Editor</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
+                    <SelectTrigger className="h-8 w-[105px] rounded-md px-2 py-1 text-xs">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <button
                     type="button"
                     onClick={() => handleRemove(collab.id)}

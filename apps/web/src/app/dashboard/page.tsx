@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, type FormEvent, useMemo } from "react
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus,
   FileText,
   Clock,
@@ -318,18 +325,21 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
             >
               Template
             </label>
-            <select
-              id="project-template"
+            <Select
               value={template}
-              onChange={(e) => setTemplate(e.target.value as Template)}
-              className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+              onValueChange={(value) => setTemplate(value as Template)}
             >
-              <option value="blank">Blank</option>
-              <option value="article">Article</option>
-              <option value="thesis">Thesis</option>
-              <option value="beamer">Beamer (Presentation)</option>
-              <option value="letter">Letter</option>
-            </select>
+              <SelectTrigger id="project-template" className="w-full">
+                <SelectValue placeholder="Select template" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="blank">Blank</SelectItem>
+                <SelectItem value="article">Article</SelectItem>
+                <SelectItem value="thesis">Thesis</SelectItem>
+                <SelectItem value="beamer">Beamer (Presentation)</SelectItem>
+                <SelectItem value="letter">Letter</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
           {/* Engine */}
@@ -340,18 +350,21 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
             >
               Engine
             </label>
-            <select
-              id="project-engine"
+            <Select
               value={engine}
-              onChange={(e) => setEngine(e.target.value as EngineOption)}
-              className="w-full rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+              onValueChange={(value) => setEngine(value as EngineOption)}
             >
-              <option value="auto">Auto-detect</option>
-              <option value="pdflatex">pdfLaTeX</option>
-              <option value="xelatex">XeLaTeX</option>
-              <option value="lualatex">LuaLaTeX</option>
-              <option value="latex">LaTeX (DVI)</option>
-            </select>
+              <SelectTrigger id="project-engine" className="w-full">
+                <SelectValue placeholder="Select engine" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto-detect</SelectItem>
+                <SelectItem value="pdflatex">pdfLaTeX</SelectItem>
+                <SelectItem value="xelatex">XeLaTeX</SelectItem>
+                <SelectItem value="lualatex">LuaLaTeX</SelectItem>
+                <SelectItem value="latex">LaTeX (DVI)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Labels */}
@@ -364,22 +377,28 @@ function NewProjectDialog({ open, defaultLabels, onClose, onCreated }: NewProjec
               </label>
 
               <div className="flex items-center gap-2">
-                <select
-                  id="labels"
-                  value={labelToAdd}
-                  onChange={(e) => setLabelToAdd(e.target.value)}
-                  className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                <Select
+                  value={labelToAdd || undefined}
+                  onValueChange={setLabelToAdd}
+                  disabled={availableLabels.length === 0}
                 >
-                  {availableLabels.length === 0 ? (
-                    <option value="">No labels available</option>
-                  ) : (
-                    availableLabels.map((label) => (
-                      <option key={`LABEL_OPTION__${label.id}`} value={label.id}>
+                  <SelectTrigger id="labels" className="flex-1">
+                    <SelectValue
+                      placeholder={
+                        availableLabels.length === 0
+                          ? "No labels available"
+                          : "Select a label"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableLabels.map((label) => (
+                      <SelectItem key={`LABEL_OPTION__${label.id}`} value={label.id}>
                         {label.name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
                 <button
                   type="button"
@@ -728,22 +747,28 @@ function EditProjectDialog({
             </label>
 
             <div className="flex items-center gap-2">
-              <select
-                id="edit-project-labels"
-                value={labelToAdd}
-                onChange={(e) => setLabelToAdd(e.target.value)}
-                className="flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+              <Select
+                value={labelToAdd || undefined}
+                onValueChange={setLabelToAdd}
+                disabled={availableLabels.length === 0}
               >
-                {availableLabels.length === 0 ? (
-                  <option value="">No labels available</option>
-                ) : (
-                  availableLabels.map((label) => (
-                    <option key={`EDIT_LABEL_OPTION__${label.id}`} value={label.id}>
+                <SelectTrigger id="edit-project-labels" className="flex-1">
+                  <SelectValue
+                    placeholder={
+                      availableLabels.length === 0
+                        ? "No labels available"
+                        : "Select a label"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableLabels.map((label) => (
+                    <SelectItem key={`EDIT_LABEL_OPTION__${label.id}`} value={label.id}>
                       {label.name}
-                    </option>
-                  ))
-                )}
-              </select>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <button
                 type="button"

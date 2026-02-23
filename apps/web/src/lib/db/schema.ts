@@ -215,6 +215,7 @@ export const userAiSettings = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    aiEnabled: boolean("ai_enabled").default(true).notNull(),
     buildProvider: varchar("build_provider", { length: 32 })
       .default("openai")
       .notNull(),

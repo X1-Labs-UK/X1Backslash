@@ -113,6 +113,12 @@ interface EditorLayoutProps {
   onIdentityResolved?: (user: CurrentUser) => void;
 }
 
+interface AiSettingsResponse {
+  settings: {
+    enabled: boolean;
+  };
+}
+
 // ─── Editor Layout ──────────────────────────────────
 
 export function EditorLayout({
@@ -163,6 +169,7 @@ export function EditorLayout({
   const [buildErrors, setBuildErrors] = useState<LogError[]>([]);
   const [aiFixExplanation, setAiFixExplanation] = useState<string | null>(null);
   const [fixingWithAi, setFixingWithAi] = useState(false);
+  const [aiFixEnabled, setAiFixEnabled] = useState(false);
   const [buildLogsExpanded, setBuildLogsExpanded] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -349,6 +356,38 @@ export function EditorLayout({
     },
     [currentUser.id, presenceUsers]
   );
+
+  useEffect(() => {
+    if (!canEdit || shareToken) {
+      setAiFixEnabled(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/settings", { cache: "no-store" });
+        if (!res.ok || cancelled) {
+          if (!cancelled) setAiFixEnabled(false);
+          return;
+        }
+
+        const data = (await res.json()) as AiSettingsResponse;
+        if (!cancelled) {
+          setAiFixEnabled(Boolean(data.settings?.enabled));
+        }
+      } catch {
+        if (!cancelled) {
+          setAiFixEnabled(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit, shareToken]);
 
   // ─── Helpers ───────────────────────────────────────
 
@@ -1505,7 +1544,7 @@ export function EditorLayout({
               errors={buildErrors}
               actorName={buildActorName}
               onErrorClick={handleErrorClick}
-              canFixWithAi={canEdit && !shareToken}
+              canFixWithAi={canEdit && !shareToken && aiFixEnabled}
               fixingWithAi={fixingWithAi}
               onFixWithAi={handleFixWithAi}
               aiExplanation={aiFixExplanation}

@@ -22,6 +22,13 @@
       "when": 1771823985686,
       "tag": "0002_ai_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771900800000,
+      "tag": "0003_ai_enabled_toggle",
+      "breakpoints": true
     }
   ]
 }

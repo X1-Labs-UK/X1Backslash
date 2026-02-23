@@ -10,6 +10,7 @@ export interface AiModelSettings {
 }
 
 export interface UserAiSettings {
+  enabled: boolean;
   buildFix: AiModelSettings;
   latexWriter: AiModelSettings;
 }
@@ -22,6 +23,7 @@ export interface PublicAiModelSettings {
 }
 
 export interface PublicUserAiSettings {
+  enabled: boolean;
   buildFix: PublicAiModelSettings;
   latexWriter: PublicAiModelSettings;
 }
