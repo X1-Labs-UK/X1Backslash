@@ -71,9 +71,6 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.1.0
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@syncfusion/ej2-react-buttons':
-        specifier: ^32.2.3
-        version: 32.2.3
       archiver:
         specifier: ^7.0.0
         version: 7.0.1
@@ -1604,22 +1601,6 @@ packages:
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
-
-  '@syncfusion/ej2-base@32.2.6':
-    resolution: {integrity: sha512-H7L8WT0+o5oSo+CTGjSWj5H+UFkQSEgkC5YpLMZJ+/LkdVTrTnw+iuwdWwd8miNEualm12QmZf8RnXccHPfg9w==}
-    hasBin: true
-
-  '@syncfusion/ej2-buttons@32.2.3':
-    resolution: {integrity: sha512-irIq12umrbJPQA5oZAr1slZ6yOq2sULkVQLFxYHSushFITsRISVP8O5ncvYBIgq0dB1JCKwlGAojEY5d/j0HuA==}
-
-  '@syncfusion/ej2-icons@32.2.3':
-    resolution: {integrity: sha512-bZn+4SWasVNRLB0C1Gt6Z4NAM1MDYIqU/uRlhAPJK9itPAvxo3buQAcrokm+3te6k39vxwFuNlMn0dFoI1zWuw==}
-
-  '@syncfusion/ej2-react-base@32.2.3':
-    resolution: {integrity: sha512-xAh78u1v4QSce/KlDIcZiZmjiGwmEFIjWqFRAqI69YJ8vdfmrrITj9ybZiWYtcDXvsxgWAhOvX6uPE3neI3vqg==}
-
-  '@syncfusion/ej2-react-buttons@32.2.3':
-    resolution: {integrity: sha512-3YCMaA6IDxNG8wHX+JbxC6gNo2m//V7zd01PomD0eojGovUjeKKZAYk4+5kXaQ8Lym++Z+BSmKcq290s1AnRJQ==}
 
   '@tailwindcss/node@4.1.18':
     resolution: {integrity: sha512-DoR7U1P7iYhw16qJ49fgXUlry1t4CpXeErJHnQ44JgTSKMaZUdf17cfn5mHchfJ4KRBZRFA/Coo+MUF5+gOaCQ==}
@@ -5100,26 +5081,6 @@ snapshots:
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
-
-  '@syncfusion/ej2-base@32.2.6':
-    dependencies:
-      '@syncfusion/ej2-icons': 32.2.3
-
-  '@syncfusion/ej2-buttons@32.2.3':
-    dependencies:
-      '@syncfusion/ej2-base': 32.2.6
-
-  '@syncfusion/ej2-icons@32.2.3': {}
-
-  '@syncfusion/ej2-react-base@32.2.3':
-    dependencies:
-      '@syncfusion/ej2-base': 32.2.6
-
-  '@syncfusion/ej2-react-buttons@32.2.3':
-    dependencies:
-      '@syncfusion/ej2-base': 32.2.6
-      '@syncfusion/ej2-buttons': 32.2.3
-      '@syncfusion/ej2-react-base': 32.2.3
 
   '@tailwindcss/node@4.1.18':
     dependencies:

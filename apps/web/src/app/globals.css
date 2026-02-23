@@ -182,48 +182,6 @@ body {
   animation: progress 2s ease-in-out infinite;
 }
 
-/* Auto-build switch (Syncfusion, custom bar+handle style) */
-.editor-auto-compile-switch.e-switch-wrapper,
-.editor-auto-compile-switch.e-css.e-switch-wrapper {
-  height: 16px !important;
-  width: 40px !important;
-}
-
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-inner,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-inner {
-  background-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent) !important;
-  border: 1px solid var(--color-border) !important;
-  border-radius: 7px !important;
-}
-
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-on,
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-off,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-on,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-off {
-  background: transparent !important;
-}
-
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-handle,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-handle {
-  background-color: var(--color-bg-primary) !important;
-  border-radius: 6px !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25) !important;
-  height: 14px !important;
-  width: 14px !important;
-}
-
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-handle.e-switch-active,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-handle.e-switch-active {
-  background-color: var(--color-accent) !important;
-  margin-left: -14px !important;
-}
-
-.editor-auto-compile-switch.e-switch-wrapper .e-switch-inner.e-switch-active,
-.editor-auto-compile-switch.e-css.e-switch-wrapper .e-switch-inner.e-switch-active {
-  background-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-bg-secondary)) !important;
-  border-color: color-mix(in srgb, var(--color-accent) 60%, var(--color-border)) !important;
-}
-
 /* Sync highlight flash in editor */
 .cm-syncHighlight {
   background-color: var(--color-accent);

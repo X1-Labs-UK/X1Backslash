@@ -15,8 +15,6 @@ import {
   Check,
   Ban,
 } from "lucide-react";
-import { SwitchComponent } from "@syncfusion/ej2-react-buttons";
-import "@syncfusion/ej2-react-buttons/styles/material.css";
 import {
   Tooltip,
   TooltipTrigger,
@@ -321,16 +319,28 @@ export function EditorHeader({
           {/* Auto-compile toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="rounded-md px-1.5 py-1 transition-colors hover:bg-bg-elevated">
-                <SwitchComponent
-                  id="auto-compile-switch"
-                  cssClass="editor-auto-compile-switch custom-switch"
-                  checked={autoCompileEnabled}
-                  change={(args: { checked: boolean }) =>
-                    onAutoCompileToggle(Boolean(args.checked))
-                  }
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoCompileEnabled}
+                aria-label="Toggle auto-compile"
+                onClick={() => onAutoCompileToggle(!autoCompileEnabled)}
+                className={cn(
+                  "relative inline-flex h-5 w-10 items-center rounded-md border transition-colors",
+                  autoCompileEnabled
+                    ? "border-accent/70 bg-accent/25"
+                    : "border-border bg-bg-tertiary"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-4 w-4 rounded-sm transition-all",
+                    autoCompileEnabled
+                      ? "translate-x-5 bg-accent shadow-sm shadow-accent/30"
+                      : "translate-x-0.5 bg-bg-primary"
+                  )}
                 />
-              </div>
+              </button>
             </TooltipTrigger>
             <TooltipContent>
               <p>Auto-compile {autoCompileEnabled ? "on" : "off"}</p>
