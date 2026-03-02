@@ -15,6 +15,7 @@ import {
 import { getProjectDir, getPdfPath, fileExists } from "@/lib/storage";
 import { runCompileContainer } from "./docker";
 import { parseLatexLog } from "./logParser";
+import { injectMissingPackages } from "./preamble";
 import { broadcastBuildUpdate } from "@/lib/websocket/server";
 import {
   COMPILE_CANCEL_KEY_PREFIX,
@@ -222,6 +223,9 @@ class CompileRunner {
       const projectDir = getProjectDir(storageUserId, projectId);
       await copyDir(projectDir, buildDir);
       console.log(`[Runner] Copied project files to build dir: ${buildDir}`);
+
+      // Step 2.5: Auto-inject missing LaTeX packages into the build copy
+      await injectMissingPackages(buildDir, mainFile);
 
       // Step 3: Run the Docker container against the isolated build dir
       const containerResult = await runCompileContainer({
