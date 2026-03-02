@@ -639,6 +639,46 @@ export function FileTree({
     [readOnly, lastClickedFileId, flatFileIds, onFileSelect]
   );
 
+  // ─── Copy & Paste files ─────────────────────────────
+
+  const handlePasteFiles = useCallback(
+    async () => {
+      if (copiedFileIds.length === 0) return;
+      const existingPaths = new Set(files.map((f) => f.path));
+
+      try {
+        for (const fileId of copiedFileIds) {
+          const file = files.find((f) => f.id === fileId);
+          if (!file || file.isDirectory) continue;
+
+          // Fetch file content
+          const res = await fetch(
+            withShareToken(`/api/projects/${projectId}/files/${fileId}`)
+          );
+          if (!res.ok) continue;
+          const data = await res.json();
+
+          // Create copy with new name
+          const copyPath = getCopyPath(file.path, existingPaths);
+          existingPaths.add(copyPath);
+
+          await fetch(withShareToken(`/api/projects/${projectId}/files`), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              path: copyPath,
+              content: data.content ?? "",
+            }),
+          });
+        }
+        onFilesChanged();
+      } catch {
+        // Silently fail
+      }
+    },
+    [copiedFileIds, files, onFilesChanged, projectId, withShareToken]
+  );
+
   // ─── Keyboard shortcuts (scoped to tree container) ─
 
   useEffect(() => {
@@ -709,46 +749,6 @@ export function FileTree({
       }
     },
     [bulkDeleteConfirm, onFilesChanged, projectId, withShareToken]
-  );
-
-  // ─── Copy & Paste files ─────────────────────────────
-
-  const handlePasteFiles = useCallback(
-    async () => {
-      if (copiedFileIds.length === 0) return;
-      const existingPaths = new Set(files.map((f) => f.path));
-
-      try {
-        for (const fileId of copiedFileIds) {
-          const file = files.find((f) => f.id === fileId);
-          if (!file || file.isDirectory) continue;
-
-          // Fetch file content
-          const res = await fetch(
-            withShareToken(`/api/projects/${projectId}/files/${fileId}`)
-          );
-          if (!res.ok) continue;
-          const data = await res.json();
-
-          // Create copy with new name
-          const copyPath = getCopyPath(file.path, existingPaths);
-          existingPaths.add(copyPath);
-
-          await fetch(withShareToken(`/api/projects/${projectId}/files`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              path: copyPath,
-              content: data.content ?? "",
-            }),
-          });
-        }
-        onFilesChanged();
-      } catch {
-        // Silently fail
-      }
-    },
-    [copiedFileIds, files, onFilesChanged, projectId, withShareToken]
   );
 
   // ─── Rename API call ──────────────────────────────
