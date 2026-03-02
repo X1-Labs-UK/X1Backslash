@@ -14,6 +14,8 @@ import {
   ChevronRight,
   ChevronDown,
   Flag,
+  Copy,
+  ClipboardPaste,
 } from "lucide-react";
 import FileIcon from "./FileIcon";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -117,6 +119,24 @@ function flattenTree(nodes: TreeNode[]): string[] {
   return result;
 }
 
+/** Generate a "copy" path for a file, avoiding collisions with existing paths. */
+function getCopyPath(originalPath: string, existingPaths: Set<string>): string {
+  const lastSlash = originalPath.lastIndexOf("/");
+  const dir = lastSlash >= 0 ? originalPath.slice(0, lastSlash + 1) : "";
+  const filename = lastSlash >= 0 ? originalPath.slice(lastSlash + 1) : originalPath;
+  const dotIdx = filename.lastIndexOf(".");
+  const name = dotIdx > 0 ? filename.slice(0, dotIdx) : filename;
+  const ext = dotIdx > 0 ? filename.slice(dotIdx) : "";
+
+  let candidate = `${dir}${name} copy${ext}`;
+  let counter = 2;
+  while (existingPaths.has(candidate)) {
+    candidate = `${dir}${name} copy ${counter}${ext}`;
+    counter++;
+  }
+  return candidate;
+}
+
 // ─── Folder Drag-and-Drop from OS ───────────────────
 
 async function collectDroppedFiles(
@@ -191,25 +211,34 @@ async function collectDroppedFiles(
 interface ContextMenuProps {
   x: number;
   y: number;
+  selectedCount: number;
   canSetEntrypoint: boolean;
   isEntrypoint: boolean;
+  hasCopied: boolean;
   onSetEntrypoint: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
   onClose: () => void;
 }
 
 function ContextMenu({
   x,
   y,
+  selectedCount,
   canSetEntrypoint,
   isEntrypoint,
+  hasCopied,
   onSetEntrypoint,
   onDelete,
   onRename,
+  onCopy,
+  onPaste,
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const isMulti = selectedCount > 1;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -227,7 +256,7 @@ function ContextMenu({
       className="fixed z-50 min-w-[140px] rounded-lg border border-border bg-bg-secondary py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
-      {canSetEntrypoint && (
+      {!isMulti && canSetEntrypoint && (
         <button
           type="button"
           disabled={isEntrypoint}
@@ -243,21 +272,41 @@ function ContextMenu({
           {isEntrypoint ? "Current entrypoint" : "Set as entrypoint"}
         </button>
       )}
+      {!isMulti && (
+        <button
+          type="button"
+          onClick={onRename}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+        >
+          <Pencil className="h-4 w-4" />
+          Rename
+        </button>
+      )}
       <button
         type="button"
-        onClick={onRename}
+        onClick={onCopy}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
       >
-        <Pencil className="h-4 w-4" />
-        Rename
+        <Copy className="h-4 w-4" />
+        {isMulti ? `Copy ${selectedCount} files` : "Copy"}
       </button>
+      {hasCopied && (
+        <button
+          type="button"
+          onClick={onPaste}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+        >
+          <ClipboardPaste className="h-4 w-4" />
+          Paste
+        </button>
+      )}
       <button
         type="button"
         onClick={onDelete}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error transition-colors hover:bg-bg-elevated"
       >
         <Trash2 className="h-4 w-4" />
-        Delete
+        {isMulti ? `Delete ${selectedCount} files` : "Delete"}
       </button>
     </div>
   );
@@ -522,6 +571,7 @@ export function FileTree({
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<Set<string> | null>(null);
+  const [copiedFileIds, setCopiedFileIds] = useState<string[]>([]);
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -556,6 +606,7 @@ export function FileTree({
 
       if (e.shiftKey && lastClickedFileId) {
         // Range select
+        e.preventDefault();
         const anchorIdx = flatFileIds.indexOf(lastClickedFileId);
         const targetIdx = flatFileIds.indexOf(fileId);
         if (anchorIdx !== -1 && targetIdx !== -1) {
@@ -564,6 +615,7 @@ export function FileTree({
           const range = new Set(flatFileIds.slice(start, end + 1));
           setSelectedFileIds(range);
         }
+        treeContainerRef.current?.focus();
       } else if (e.ctrlKey || e.metaKey) {
         // Toggle select
         setSelectedFileIds((prev) => {
@@ -576,6 +628,7 @@ export function FileTree({
           return next;
         });
         setLastClickedFileId(fileId);
+        treeContainerRef.current?.focus();
       } else {
         // Plain click — clear selection, open file
         setSelectedFileIds(new Set());
@@ -603,12 +656,25 @@ export function FileTree({
       } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
         e.preventDefault();
         setSelectedFileIds(new Set(flatFileIds));
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        const ids = selectedFileIds.size > 0
+          ? [...selectedFileIds]
+          : activeFileId ? [activeFileId] : [];
+        if (ids.length > 0) {
+          e.preventDefault();
+          setCopiedFileIds(ids);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        if (copiedFileIds.length > 0) {
+          e.preventDefault();
+          handlePasteFiles();
+        }
       }
     }
 
     container.addEventListener("keydown", handleKeyDown);
     return () => container.removeEventListener("keydown", handleKeyDown);
-  }, [readOnly, selectedFileIds, flatFileIds]);
+  }, [readOnly, selectedFileIds, flatFileIds, activeFileId, copiedFileIds, handlePasteFiles]);
 
   // ─── Prune stale selections when files change ──────
 
@@ -643,6 +709,46 @@ export function FileTree({
       }
     },
     [bulkDeleteConfirm, onFilesChanged, projectId, withShareToken]
+  );
+
+  // ─── Copy & Paste files ─────────────────────────────
+
+  const handlePasteFiles = useCallback(
+    async () => {
+      if (copiedFileIds.length === 0) return;
+      const existingPaths = new Set(files.map((f) => f.path));
+
+      try {
+        for (const fileId of copiedFileIds) {
+          const file = files.find((f) => f.id === fileId);
+          if (!file || file.isDirectory) continue;
+
+          // Fetch file content
+          const res = await fetch(
+            withShareToken(`/api/projects/${projectId}/files/${fileId}`)
+          );
+          if (!res.ok) continue;
+          const data = await res.json();
+
+          // Create copy with new name
+          const copyPath = getCopyPath(file.path, existingPaths);
+          existingPaths.add(copyPath);
+
+          await fetch(withShareToken(`/api/projects/${projectId}/files`), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              path: copyPath,
+              content: data.content ?? "",
+            }),
+          });
+        }
+        onFilesChanged();
+      } catch {
+        // Silently fail
+      }
+    },
+    [copiedFileIds, files, onFilesChanged, projectId, withShareToken]
   );
 
   // ─── Rename API call ──────────────────────────────
@@ -915,9 +1021,13 @@ export function FileTree({
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, file: ProjectFile) => {
       e.preventDefault();
+      // If right-clicking a file not in the selection, clear selection
+      if (!selectedFileIds.has(file.id)) {
+        setSelectedFileIds(new Set());
+      }
       setContextMenu({ x: e.clientX, y: e.clientY, file });
     },
-    []
+    [selectedFileIds]
   );
 
   const closeContextMenu = useCallback(() => {
@@ -1090,6 +1200,7 @@ export function FileTree({
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          selectedCount={selectedFileIds.has(contextMenu.file.id) ? selectedFileIds.size : 1}
           canSetEntrypoint={
             !contextMenu.file.isDirectory &&
             contextMenu.file.path.toLowerCase().endsWith(".tex")
@@ -1100,13 +1211,29 @@ export function FileTree({
             closeContextMenu();
           }}
           onDelete={() => {
-            handleDeleteFile(contextMenu.file.id);
+            if (selectedFileIds.has(contextMenu.file.id) && selectedFileIds.size > 1) {
+              setBulkDeleteConfirm(new Set(selectedFileIds));
+            } else {
+              handleDeleteFile(contextMenu.file.id);
+            }
             closeContextMenu();
           }}
           onRename={() => {
             setRenamingFileId(contextMenu.file.id);
             closeContextMenu();
           }}
+          onCopy={() => {
+            const ids = selectedFileIds.has(contextMenu.file.id) && selectedFileIds.size > 1
+              ? [...selectedFileIds]
+              : [contextMenu.file.id];
+            setCopiedFileIds(ids);
+            closeContextMenu();
+          }}
+          onPaste={() => {
+            handlePasteFiles();
+            closeContextMenu();
+          }}
+          hasCopied={copiedFileIds.length > 0}
           onClose={closeContextMenu}
         />
       )}
