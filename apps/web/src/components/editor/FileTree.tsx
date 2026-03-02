@@ -617,9 +617,12 @@ export function FileTree({
         }
         treeContainerRef.current?.focus();
       } else if (e.ctrlKey || e.metaKey) {
-        // Toggle select
+        // Toggle select — include activeFileId if starting fresh
         setSelectedFileIds((prev) => {
           const next = new Set(prev);
+          if (next.size === 0 && activeFileId && activeFileId !== fileId) {
+            next.add(activeFileId);
+          }
           if (next.has(fileId)) {
             next.delete(fileId);
           } else {
@@ -651,25 +654,48 @@ export function FileTree({
           const file = files.find((f) => f.id === fileId);
           if (!file || file.isDirectory) continue;
 
-          // Fetch file content
-          const res = await fetch(
-            withShareToken(`/api/projects/${projectId}/files/${fileId}`)
-          );
-          if (!res.ok) continue;
-          const data = await res.json();
-
-          // Create copy with new name
           const copyPath = getCopyPath(file.path, existingPaths);
           existingPaths.add(copyPath);
 
-          await fetch(withShareToken(`/api/projects/${projectId}/files`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              path: copyPath,
-              content: data.content ?? "",
-            }),
-          });
+          const isBinary = file.mimeType?.startsWith("image/") ||
+            file.mimeType === "application/pdf" ||
+            file.mimeType === "application/octet-stream";
+
+          if (isBinary) {
+            // Binary files: fetch raw bytes and upload via FormData
+            const res = await fetch(
+              withShareToken(`/api/projects/${projectId}/files/${fileId}?raw`)
+            );
+            if (!res.ok) continue;
+            const blob = await res.blob();
+            const NativeFile = globalThis.File;
+            const copyFile = new NativeFile([blob], copyPath.split("/").pop()!, { type: file.mimeType ?? undefined });
+
+            const formData = new FormData();
+            formData.append("files", copyFile);
+            formData.append("paths", copyPath);
+
+            await fetch(
+              withShareToken(`/api/projects/${projectId}/files/upload`),
+              { method: "POST", body: formData }
+            );
+          } else {
+            // Text files: fetch JSON content and create via POST
+            const res = await fetch(
+              withShareToken(`/api/projects/${projectId}/files/${fileId}`)
+            );
+            if (!res.ok) continue;
+            const data = await res.json();
+
+            await fetch(withShareToken(`/api/projects/${projectId}/files`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                path: copyPath,
+                content: data.content ?? "",
+              }),
+            });
+          }
         }
         onFilesChanged();
       } catch {
@@ -690,6 +716,9 @@ export function FileTree({
         if (selectedFileIds.size > 0) {
           e.preventDefault();
           setBulkDeleteConfirm(new Set(selectedFileIds));
+        } else if (activeFileId) {
+          e.preventDefault();
+          setDeleteConfirm({ fileId: activeFileId });
         }
       } else if (e.key === "Escape") {
         setSelectedFileIds(new Set());
