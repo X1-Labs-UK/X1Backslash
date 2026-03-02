@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
 import {
   File,
@@ -14,8 +14,11 @@ import {
   ChevronRight,
   ChevronDown,
   Flag,
+  Copy,
+  ClipboardPaste,
 } from "lucide-react";
 import FileIcon from "./FileIcon";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 // ─── Types ──────────────────────────────────────────
 
@@ -99,6 +102,41 @@ function getParentPath(filePath: string): string {
   return idx === -1 ? "" : filePath.slice(0, idx);
 }
 
+/** DFS traversal returning file IDs in visual order (skips directories). */
+function flattenTree(nodes: TreeNode[]): string[] {
+  const result: string[] = [];
+  function walk(list: TreeNode[]) {
+    for (const node of list) {
+      if (!node.isDirectory && node.file) {
+        result.push(node.file.id);
+      }
+      if (node.children.length > 0) {
+        walk(node.children);
+      }
+    }
+  }
+  walk(nodes);
+  return result;
+}
+
+/** Generate a "copy" path for a file, avoiding collisions with existing paths. */
+function getCopyPath(originalPath: string, existingPaths: Set<string>): string {
+  const lastSlash = originalPath.lastIndexOf("/");
+  const dir = lastSlash >= 0 ? originalPath.slice(0, lastSlash + 1) : "";
+  const filename = lastSlash >= 0 ? originalPath.slice(lastSlash + 1) : originalPath;
+  const dotIdx = filename.lastIndexOf(".");
+  const name = dotIdx > 0 ? filename.slice(0, dotIdx) : filename;
+  const ext = dotIdx > 0 ? filename.slice(dotIdx) : "";
+
+  let candidate = `${dir}${name} copy${ext}`;
+  let counter = 2;
+  while (existingPaths.has(candidate)) {
+    candidate = `${dir}${name} copy ${counter}${ext}`;
+    counter++;
+  }
+  return candidate;
+}
+
 // ─── Folder Drag-and-Drop from OS ───────────────────
 
 async function collectDroppedFiles(
@@ -173,25 +211,34 @@ async function collectDroppedFiles(
 interface ContextMenuProps {
   x: number;
   y: number;
+  selectedCount: number;
   canSetEntrypoint: boolean;
   isEntrypoint: boolean;
+  hasCopied: boolean;
   onSetEntrypoint: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
   onClose: () => void;
 }
 
 function ContextMenu({
   x,
   y,
+  selectedCount,
   canSetEntrypoint,
   isEntrypoint,
+  hasCopied,
   onSetEntrypoint,
   onDelete,
   onRename,
+  onCopy,
+  onPaste,
   onClose,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const isMulti = selectedCount > 1;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -209,7 +256,7 @@ function ContextMenu({
       className="fixed z-50 min-w-[140px] rounded-lg border border-border bg-bg-secondary py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
-      {canSetEntrypoint && (
+      {!isMulti && canSetEntrypoint && (
         <button
           type="button"
           disabled={isEntrypoint}
@@ -225,21 +272,41 @@ function ContextMenu({
           {isEntrypoint ? "Current entrypoint" : "Set as entrypoint"}
         </button>
       )}
+      {!isMulti && (
+        <button
+          type="button"
+          onClick={onRename}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+        >
+          <Pencil className="h-4 w-4" />
+          Rename
+        </button>
+      )}
       <button
         type="button"
-        onClick={onRename}
+        onClick={onCopy}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
       >
-        <Pencil className="h-4 w-4" />
-        Rename
+        <Copy className="h-4 w-4" />
+        {isMulti ? `Copy ${selectedCount} files` : "Copy"}
       </button>
+      {hasCopied && (
+        <button
+          type="button"
+          onClick={onPaste}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-bg-elevated hover:text-text-primary"
+        >
+          <ClipboardPaste className="h-4 w-4" />
+          Paste
+        </button>
+      )}
       <button
         type="button"
         onClick={onDelete}
         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error transition-colors hover:bg-bg-elevated"
       >
         <Trash2 className="h-4 w-4" />
-        Delete
+        {isMulti ? `Delete ${selectedCount} files` : "Delete"}
       </button>
     </div>
   );
@@ -254,7 +321,9 @@ interface TreeNodeItemProps {
   mainFilePath: string;
   renamingFileId: string | null;
   dropTargetPath: string | null;
+  selectedFileIds: Set<string>;
   onFileSelect: (fileId: string, filePath: string) => void;
+  onFileClick: (fileId: string, filePath: string, e: React.MouseEvent) => void;
   onDeleteFile: (fileId: string) => void;
   onContextMenu: (e: React.MouseEvent, file: ProjectFile) => void;
   onRenameSubmit: (fileId: string, oldPath: string, newName: string) => void;
@@ -272,7 +341,9 @@ function TreeNodeItem({
   mainFilePath,
   renamingFileId,
   dropTargetPath,
+  selectedFileIds,
   onFileSelect,
+  onFileClick,
   onDeleteFile,
   onContextMenu,
   onRenameSubmit,
@@ -286,6 +357,7 @@ function TreeNodeItem({
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isActive = node.file?.id === activeFileId;
+  const isSelected = node.file ? selectedFileIds.has(node.file.id) : false;
   const isRenaming = node.file?.id === renamingFileId;
   const isEntrypoint = !!node.file && !node.isDirectory && node.file.path === mainFilePath;
 
@@ -311,12 +383,12 @@ function TreeNodeItem({
     }
   }, [isRenaming, node.name, node.isDirectory]);
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent) {
     if (isRenaming) return;
     if (node.isDirectory) {
       setExpanded(!expanded);
     } else if (node.file) {
-      onFileSelect(node.file.id, node.file.path);
+      onFileClick(node.file.id, node.file.path, e);
     }
   }
 
@@ -375,7 +447,9 @@ function TreeNodeItem({
           "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors",
           isActive
             ? "bg-accent/15 text-accent"
-            : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary",
+            : isSelected
+              ? "bg-accent/10 text-accent/80"
+              : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary",
           dropTargetPath === node.path && node.isDirectory && "ring-2 ring-accent/50 bg-accent/10"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -441,7 +515,9 @@ function TreeNodeItem({
               mainFilePath={mainFilePath}
               renamingFileId={renamingFileId}
               dropTargetPath={dropTargetPath}
+              selectedFileIds={selectedFileIds}
               onFileSelect={onFileSelect}
+              onFileClick={onFileClick}
               onDeleteFile={onDeleteFile}
               onContextMenu={onContextMenu}
               onRenameSubmit={onRenameSubmit}
@@ -490,8 +566,16 @@ export function FileTree({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ fileId: string } | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<Set<string> | null>(null);
+  const [copiedFileIds, setCopiedFileIds] = useState<string[]>([]);
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
 
   const withShareToken = useCallback(
     (url: string) => {
@@ -509,6 +593,192 @@ export function FileTree({
   }, [creating]);
 
   const tree = buildTree(files);
+  const flatFileIds = useMemo(() => flattenTree(tree), [tree]);
+
+  // ─── Multi-select click handler ────────────────────
+
+  const handleFileClick = useCallback(
+    (fileId: string, filePath: string, e: React.MouseEvent) => {
+      if (readOnly) {
+        onFileSelect(fileId, filePath);
+        return;
+      }
+
+      if (e.shiftKey && lastClickedFileId) {
+        // Range select
+        e.preventDefault();
+        const anchorIdx = flatFileIds.indexOf(lastClickedFileId);
+        const targetIdx = flatFileIds.indexOf(fileId);
+        if (anchorIdx !== -1 && targetIdx !== -1) {
+          const start = Math.min(anchorIdx, targetIdx);
+          const end = Math.max(anchorIdx, targetIdx);
+          const range = new Set(flatFileIds.slice(start, end + 1));
+          setSelectedFileIds(range);
+        }
+        treeContainerRef.current?.focus();
+      } else if (e.ctrlKey || e.metaKey) {
+        // Toggle select — include activeFileId if starting fresh
+        setSelectedFileIds((prev) => {
+          const next = new Set(prev);
+          if (next.size === 0 && activeFileId && activeFileId !== fileId) {
+            next.add(activeFileId);
+          }
+          if (next.has(fileId)) {
+            next.delete(fileId);
+          } else {
+            next.add(fileId);
+          }
+          return next;
+        });
+        setLastClickedFileId(fileId);
+        treeContainerRef.current?.focus();
+      } else {
+        // Plain click — clear selection, open file
+        setSelectedFileIds(new Set());
+        setLastClickedFileId(fileId);
+        onFileSelect(fileId, filePath);
+      }
+    },
+    [readOnly, lastClickedFileId, flatFileIds, onFileSelect]
+  );
+
+  // ─── Copy & Paste files ─────────────────────────────
+
+  const handlePasteFiles = useCallback(
+    async () => {
+      if (copiedFileIds.length === 0) return;
+      const existingPaths = new Set(files.map((f) => f.path));
+
+      try {
+        for (const fileId of copiedFileIds) {
+          const file = files.find((f) => f.id === fileId);
+          if (!file || file.isDirectory) continue;
+
+          const copyPath = getCopyPath(file.path, existingPaths);
+          existingPaths.add(copyPath);
+
+          const isBinary = file.mimeType?.startsWith("image/") ||
+            file.mimeType === "application/pdf" ||
+            file.mimeType === "application/octet-stream";
+
+          if (isBinary) {
+            // Binary files: fetch raw bytes and upload via FormData
+            const res = await fetch(
+              withShareToken(`/api/projects/${projectId}/files/${fileId}?raw`)
+            );
+            if (!res.ok) continue;
+            const blob = await res.blob();
+            const NativeFile = globalThis.File;
+            const copyFile = new NativeFile([blob], copyPath.split("/").pop()!, { type: file.mimeType ?? undefined });
+
+            const formData = new FormData();
+            formData.append("files", copyFile);
+            formData.append("paths", copyPath);
+
+            await fetch(
+              withShareToken(`/api/projects/${projectId}/files/upload`),
+              { method: "POST", body: formData }
+            );
+          } else {
+            // Text files: fetch JSON content and create via POST
+            const res = await fetch(
+              withShareToken(`/api/projects/${projectId}/files/${fileId}`)
+            );
+            if (!res.ok) continue;
+            const data = await res.json();
+
+            await fetch(withShareToken(`/api/projects/${projectId}/files`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                path: copyPath,
+                content: data.content ?? "",
+              }),
+            });
+          }
+        }
+        onFilesChanged();
+      } catch {
+        // Silently fail
+      }
+    },
+    [copiedFileIds, files, onFilesChanged, projectId, withShareToken]
+  );
+
+  // ─── Keyboard shortcuts (scoped to tree container) ─
+
+  useEffect(() => {
+    const container = treeContainerRef.current;
+    if (!container || readOnly) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedFileIds.size > 0) {
+          e.preventDefault();
+          setBulkDeleteConfirm(new Set(selectedFileIds));
+        } else if (activeFileId) {
+          e.preventDefault();
+          setDeleteConfirm({ fileId: activeFileId });
+        }
+      } else if (e.key === "Escape") {
+        setSelectedFileIds(new Set());
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        setSelectedFileIds(new Set(flatFileIds));
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        const ids = selectedFileIds.size > 0
+          ? [...selectedFileIds]
+          : activeFileId ? [activeFileId] : [];
+        if (ids.length > 0) {
+          e.preventDefault();
+          setCopiedFileIds(ids);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        if (copiedFileIds.length > 0) {
+          e.preventDefault();
+          handlePasteFiles();
+        }
+      }
+    }
+
+    container.addEventListener("keydown", handleKeyDown);
+    return () => container.removeEventListener("keydown", handleKeyDown);
+  }, [readOnly, selectedFileIds, flatFileIds, activeFileId, copiedFileIds, handlePasteFiles]);
+
+  // ─── Prune stale selections when files change ──────
+
+  useEffect(() => {
+    const validIds = new Set(files.filter((f) => !f.isDirectory).map((f) => f.id));
+    setSelectedFileIds((prev) => {
+      const pruned = new Set([...prev].filter((id) => validIds.has(id)));
+      if (pruned.size !== prev.size) return pruned;
+      return prev;
+    });
+  }, [files]);
+
+  // ─── Bulk delete ───────────────────────────────────
+
+  const confirmBulkDelete = useCallback(
+    async () => {
+      if (!bulkDeleteConfirm) return;
+      const idsToDelete = [...bulkDeleteConfirm];
+      setBulkDeleteConfirm(null);
+      setSelectedFileIds(new Set());
+
+      try {
+        for (const fileId of idsToDelete) {
+          await fetch(
+            withShareToken(`/api/projects/${projectId}/files/${fileId}`),
+            { method: "DELETE" }
+          );
+        }
+        onFilesChanged();
+      } catch {
+        // Silently fail
+      }
+    },
+    [bulkDeleteConfirm, onFilesChanged, projectId, withShareToken]
+  );
 
   // ─── Rename API call ──────────────────────────────
 
@@ -714,11 +984,17 @@ export function FileTree({
   // ─── Delete file ─────────────────────────────────
 
   const handleDeleteFile = useCallback(
-    async (fileId: string) => {
-      const confirmed = window.confirm(
-        "Are you sure you want to delete this file?"
-      );
-      if (!confirmed) return;
+    (fileId: string) => {
+      setDeleteConfirm({ fileId });
+    },
+    []
+  );
+
+  const confirmDelete = useCallback(
+    async () => {
+      if (!deleteConfirm) return;
+      const { fileId } = deleteConfirm;
+      setDeleteConfirm(null);
 
       try {
         const res = await fetch(
@@ -737,7 +1013,7 @@ export function FileTree({
         // Silently fail
       }
     },
-    [onFilesChanged, onMainFileChange, projectId, withShareToken]
+    [deleteConfirm, onFilesChanged, onMainFileChange, projectId, withShareToken]
   );
 
   const handleSetEntrypoint = useCallback(
@@ -754,7 +1030,7 @@ export function FileTree({
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          window.alert(data.error || "Failed to set entrypoint");
+          setAlertMessage(data.error || "Failed to set entrypoint");
           return;
         }
 
@@ -763,7 +1039,7 @@ export function FileTree({
           typeof data.mainFile === "string" ? data.mainFile : filePath
         );
       } catch {
-        window.alert("Failed to set entrypoint");
+        setAlertMessage("Failed to set entrypoint");
       }
     },
     [onMainFileChange, projectId, withShareToken]
@@ -774,9 +1050,13 @@ export function FileTree({
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, file: ProjectFile) => {
       e.preventDefault();
+      // If right-clicking a file not in the selection, clear selection
+      if (!selectedFileIds.has(file.id)) {
+        setSelectedFileIds(new Set());
+      }
       setContextMenu({ x: e.clientX, y: e.clientY, file });
     },
-    []
+    [selectedFileIds]
   );
 
   const closeContextMenu = useCallback(() => {
@@ -794,6 +1074,25 @@ export function FileTree({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {/* Hidden file picker input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".tex,.bib,.cls,.sty,.bst,.png,.jpg,.jpeg,.gif,.svg,.pdf,.eps,.ps,.txt,.md,.csv,.dat,.tikz,.pgf"
+        className="hidden"
+        onChange={(e) => {
+          const fileList = e.target.files;
+          if (!fileList || fileList.length === 0) return;
+          const entries: { file: File; path: string }[] = [];
+          for (let i = 0; i < fileList.length; i++) {
+            entries.push({ file: fileList[i], path: fileList[i].name });
+          }
+          uploadFiles(entries);
+          e.target.value = "";
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
@@ -822,6 +1121,14 @@ export function FileTree({
               className="rounded p-1 text-text-muted transition-colors hover:text-text-primary hover:bg-bg-elevated"
             >
               <FolderPlus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload Files"
+              className="rounded p-1 text-text-muted transition-colors hover:text-text-primary hover:bg-bg-elevated"
+            >
+              <Upload className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -868,7 +1175,11 @@ export function FileTree({
       )}
 
       {/* Tree content */}
-      <div className="flex-1 overflow-y-auto px-1 py-1">
+      <div
+        ref={treeContainerRef}
+        tabIndex={0}
+        className="flex-1 overflow-y-auto px-1 py-1 outline-none"
+      >
         {/* Drop overlay */}
         {isDraggingOver && (
           <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-accent/40 px-4 py-6 text-center mb-1">
@@ -898,7 +1209,9 @@ export function FileTree({
             mainFilePath={mainFilePath}
             renamingFileId={renamingFileId}
             dropTargetPath={dropTargetPath}
+            selectedFileIds={selectedFileIds}
             onFileSelect={onFileSelect}
+            onFileClick={handleFileClick}
             onDeleteFile={handleDeleteFile}
             onContextMenu={handleContextMenu}
             onRenameSubmit={handleRenameSubmit}
@@ -916,6 +1229,7 @@ export function FileTree({
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          selectedCount={selectedFileIds.has(contextMenu.file.id) ? selectedFileIds.size : 1}
           canSetEntrypoint={
             !contextMenu.file.isDirectory &&
             contextMenu.file.path.toLowerCase().endsWith(".tex")
@@ -926,16 +1240,64 @@ export function FileTree({
             closeContextMenu();
           }}
           onDelete={() => {
-            handleDeleteFile(contextMenu.file.id);
+            if (selectedFileIds.has(contextMenu.file.id) && selectedFileIds.size > 1) {
+              setBulkDeleteConfirm(new Set(selectedFileIds));
+            } else {
+              handleDeleteFile(contextMenu.file.id);
+            }
             closeContextMenu();
           }}
           onRename={() => {
             setRenamingFileId(contextMenu.file.id);
             closeContextMenu();
           }}
+          onCopy={() => {
+            const ids = selectedFileIds.has(contextMenu.file.id) && selectedFileIds.size > 1
+              ? [...selectedFileIds]
+              : [contextMenu.file.id];
+            setCopiedFileIds(ids);
+            closeContextMenu();
+          }}
+          onPaste={() => {
+            handlePasteFiles();
+            closeContextMenu();
+          }}
+          hasCopied={copiedFileIds.length > 0}
           onClose={closeContextMenu}
         />
       )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title="Delete file"
+        message="Are you sure you want to delete this file? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Bulk delete confirmation dialog */}
+      <ConfirmDialog
+        open={bulkDeleteConfirm !== null}
+        title="Delete files"
+        message={`Are you sure you want to delete ${bulkDeleteConfirm?.size ?? 0} file(s)? This action cannot be undone.`}
+        confirmLabel="Delete All"
+        variant="danger"
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setBulkDeleteConfirm(null)}
+      />
+
+      {/* Alert dialog */}
+      <ConfirmDialog
+        open={alertMessage !== null}
+        title="Error"
+        message={alertMessage ?? ""}
+        alert
+        onConfirm={() => setAlertMessage(null)}
+        onCancel={() => setAlertMessage(null)}
+      />
     </div>
   );
 }
