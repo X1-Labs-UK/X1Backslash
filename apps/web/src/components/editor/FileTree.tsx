@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils/cn";
 import {
   File,
@@ -98,6 +98,23 @@ function buildTree(files: ProjectFile[]): TreeNode[] {
 function getParentPath(filePath: string): string {
   const idx = filePath.lastIndexOf("/");
   return idx === -1 ? "" : filePath.slice(0, idx);
+}
+
+/** DFS traversal returning file IDs in visual order (skips directories). */
+function flattenTree(nodes: TreeNode[]): string[] {
+  const result: string[] = [];
+  function walk(list: TreeNode[]) {
+    for (const node of list) {
+      if (!node.isDirectory && node.file) {
+        result.push(node.file.id);
+      }
+      if (node.children.length > 0) {
+        walk(node.children);
+      }
+    }
+  }
+  walk(nodes);
+  return result;
 }
 
 // ─── Folder Drag-and-Drop from OS ───────────────────
@@ -255,7 +272,9 @@ interface TreeNodeItemProps {
   mainFilePath: string;
   renamingFileId: string | null;
   dropTargetPath: string | null;
+  selectedFileIds: Set<string>;
   onFileSelect: (fileId: string, filePath: string) => void;
+  onFileClick: (fileId: string, filePath: string, e: React.MouseEvent) => void;
   onDeleteFile: (fileId: string) => void;
   onContextMenu: (e: React.MouseEvent, file: ProjectFile) => void;
   onRenameSubmit: (fileId: string, oldPath: string, newName: string) => void;
@@ -273,7 +292,9 @@ function TreeNodeItem({
   mainFilePath,
   renamingFileId,
   dropTargetPath,
+  selectedFileIds,
   onFileSelect,
+  onFileClick,
   onDeleteFile,
   onContextMenu,
   onRenameSubmit,
@@ -287,6 +308,7 @@ function TreeNodeItem({
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isActive = node.file?.id === activeFileId;
+  const isSelected = node.file ? selectedFileIds.has(node.file.id) : false;
   const isRenaming = node.file?.id === renamingFileId;
   const isEntrypoint = !!node.file && !node.isDirectory && node.file.path === mainFilePath;
 
@@ -312,12 +334,12 @@ function TreeNodeItem({
     }
   }, [isRenaming, node.name, node.isDirectory]);
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent) {
     if (isRenaming) return;
     if (node.isDirectory) {
       setExpanded(!expanded);
     } else if (node.file) {
-      onFileSelect(node.file.id, node.file.path);
+      onFileClick(node.file.id, node.file.path, e);
     }
   }
 
@@ -376,7 +398,9 @@ function TreeNodeItem({
           "flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors",
           isActive
             ? "bg-accent/15 text-accent"
-            : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary",
+            : isSelected
+              ? "bg-accent/10 text-accent/80"
+              : "text-text-secondary hover:bg-bg-elevated hover:text-text-primary",
           dropTargetPath === node.path && node.isDirectory && "ring-2 ring-accent/50 bg-accent/10"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -442,7 +466,9 @@ function TreeNodeItem({
               mainFilePath={mainFilePath}
               renamingFileId={renamingFileId}
               dropTargetPath={dropTargetPath}
+              selectedFileIds={selectedFileIds}
               onFileSelect={onFileSelect}
+              onFileClick={onFileClick}
               onDeleteFile={onDeleteFile}
               onContextMenu={onContextMenu}
               onRenameSubmit={onRenameSubmit}
@@ -493,9 +519,13 @@ export function FileTree({
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ fileId: string } | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [lastClickedFileId, setLastClickedFileId] = useState<string | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<Set<string> | null>(null);
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
 
   const withShareToken = useCallback(
     (url: string) => {
@@ -513,6 +543,107 @@ export function FileTree({
   }, [creating]);
 
   const tree = buildTree(files);
+  const flatFileIds = useMemo(() => flattenTree(tree), [tree]);
+
+  // ─── Multi-select click handler ────────────────────
+
+  const handleFileClick = useCallback(
+    (fileId: string, filePath: string, e: React.MouseEvent) => {
+      if (readOnly) {
+        onFileSelect(fileId, filePath);
+        return;
+      }
+
+      if (e.shiftKey && lastClickedFileId) {
+        // Range select
+        const anchorIdx = flatFileIds.indexOf(lastClickedFileId);
+        const targetIdx = flatFileIds.indexOf(fileId);
+        if (anchorIdx !== -1 && targetIdx !== -1) {
+          const start = Math.min(anchorIdx, targetIdx);
+          const end = Math.max(anchorIdx, targetIdx);
+          const range = new Set(flatFileIds.slice(start, end + 1));
+          setSelectedFileIds(range);
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        // Toggle select
+        setSelectedFileIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(fileId)) {
+            next.delete(fileId);
+          } else {
+            next.add(fileId);
+          }
+          return next;
+        });
+        setLastClickedFileId(fileId);
+      } else {
+        // Plain click — clear selection, open file
+        setSelectedFileIds(new Set());
+        setLastClickedFileId(fileId);
+        onFileSelect(fileId, filePath);
+      }
+    },
+    [readOnly, lastClickedFileId, flatFileIds, onFileSelect]
+  );
+
+  // ─── Keyboard shortcuts (scoped to tree container) ─
+
+  useEffect(() => {
+    const container = treeContainerRef.current;
+    if (!container || readOnly) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedFileIds.size > 0) {
+          e.preventDefault();
+          setBulkDeleteConfirm(new Set(selectedFileIds));
+        }
+      } else if (e.key === "Escape") {
+        setSelectedFileIds(new Set());
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        e.preventDefault();
+        setSelectedFileIds(new Set(flatFileIds));
+      }
+    }
+
+    container.addEventListener("keydown", handleKeyDown);
+    return () => container.removeEventListener("keydown", handleKeyDown);
+  }, [readOnly, selectedFileIds, flatFileIds]);
+
+  // ─── Prune stale selections when files change ──────
+
+  useEffect(() => {
+    const validIds = new Set(files.filter((f) => !f.isDirectory).map((f) => f.id));
+    setSelectedFileIds((prev) => {
+      const pruned = new Set([...prev].filter((id) => validIds.has(id)));
+      if (pruned.size !== prev.size) return pruned;
+      return prev;
+    });
+  }, [files]);
+
+  // ─── Bulk delete ───────────────────────────────────
+
+  const confirmBulkDelete = useCallback(
+    async () => {
+      if (!bulkDeleteConfirm) return;
+      const idsToDelete = [...bulkDeleteConfirm];
+      setBulkDeleteConfirm(null);
+      setSelectedFileIds(new Set());
+
+      try {
+        for (const fileId of idsToDelete) {
+          await fetch(
+            withShareToken(`/api/projects/${projectId}/files/${fileId}`),
+            { method: "DELETE" }
+          );
+        }
+        onFilesChanged();
+      } catch {
+        // Silently fail
+      }
+    },
+    [bulkDeleteConfirm, onFilesChanged, projectId, withShareToken]
+  );
 
   // ─── Rename API call ──────────────────────────────
 
@@ -905,7 +1036,11 @@ export function FileTree({
       )}
 
       {/* Tree content */}
-      <div className="flex-1 overflow-y-auto px-1 py-1">
+      <div
+        ref={treeContainerRef}
+        tabIndex={0}
+        className="flex-1 overflow-y-auto px-1 py-1 outline-none"
+      >
         {/* Drop overlay */}
         {isDraggingOver && (
           <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-accent/40 px-4 py-6 text-center mb-1">
@@ -935,7 +1070,9 @@ export function FileTree({
             mainFilePath={mainFilePath}
             renamingFileId={renamingFileId}
             dropTargetPath={dropTargetPath}
+            selectedFileIds={selectedFileIds}
             onFileSelect={onFileSelect}
+            onFileClick={handleFileClick}
             onDeleteFile={handleDeleteFile}
             onContextMenu={handleContextMenu}
             onRenameSubmit={handleRenameSubmit}
@@ -983,6 +1120,17 @@ export function FileTree({
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Bulk delete confirmation dialog */}
+      <ConfirmDialog
+        open={bulkDeleteConfirm !== null}
+        title="Delete files"
+        message={`Are you sure you want to delete ${bulkDeleteConfirm?.size ?? 0} file(s)? This action cannot be undone.`}
+        confirmLabel="Delete All"
+        variant="danger"
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setBulkDeleteConfirm(null)}
       />
 
       {/* Alert dialog */}

@@ -1218,11 +1218,17 @@ export function EditorLayout({
         e.preventDefault();
         handleImmediateSave();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "w") {
+        e.preventDefault();
+        if (activeFileId) {
+          handleCloseTab(activeFileId);
+        }
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleCompile, handleImmediateSave]);
+  }, [handleCompile, handleImmediateSave, activeFileId, handleCloseTab]);
 
   // ─── Refresh files ────────────────────────────────
 
