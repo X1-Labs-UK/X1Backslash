@@ -16,6 +16,7 @@ import {
   Flag,
 } from "lucide-react";
 import FileIcon from "./FileIcon";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 // ─── Types ──────────────────────────────────────────
 
@@ -490,8 +491,11 @@ export function FileTree({
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ fileId: string } | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const withShareToken = useCallback(
     (url: string) => {
@@ -714,11 +718,17 @@ export function FileTree({
   // ─── Delete file ─────────────────────────────────
 
   const handleDeleteFile = useCallback(
-    async (fileId: string) => {
-      const confirmed = window.confirm(
-        "Are you sure you want to delete this file?"
-      );
-      if (!confirmed) return;
+    (fileId: string) => {
+      setDeleteConfirm({ fileId });
+    },
+    []
+  );
+
+  const confirmDelete = useCallback(
+    async () => {
+      if (!deleteConfirm) return;
+      const { fileId } = deleteConfirm;
+      setDeleteConfirm(null);
 
       try {
         const res = await fetch(
@@ -737,7 +747,7 @@ export function FileTree({
         // Silently fail
       }
     },
-    [onFilesChanged, onMainFileChange, projectId, withShareToken]
+    [deleteConfirm, onFilesChanged, onMainFileChange, projectId, withShareToken]
   );
 
   const handleSetEntrypoint = useCallback(
@@ -754,7 +764,7 @@ export function FileTree({
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          window.alert(data.error || "Failed to set entrypoint");
+          setAlertMessage(data.error || "Failed to set entrypoint");
           return;
         }
 
@@ -763,7 +773,7 @@ export function FileTree({
           typeof data.mainFile === "string" ? data.mainFile : filePath
         );
       } catch {
-        window.alert("Failed to set entrypoint");
+        setAlertMessage("Failed to set entrypoint");
       }
     },
     [onMainFileChange, projectId, withShareToken]
@@ -794,6 +804,25 @@ export function FileTree({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {/* Hidden file picker input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".tex,.bib,.cls,.sty,.bst,.png,.jpg,.jpeg,.gif,.svg,.pdf,.eps,.ps,.txt,.md,.csv,.dat,.tikz,.pgf"
+        className="hidden"
+        onChange={(e) => {
+          const fileList = e.target.files;
+          if (!fileList || fileList.length === 0) return;
+          const entries: { file: File; path: string }[] = [];
+          for (let i = 0; i < fileList.length; i++) {
+            entries.push({ file: fileList[i], path: fileList[i].name });
+          }
+          uploadFiles(entries);
+          e.target.value = "";
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
@@ -822,6 +851,14 @@ export function FileTree({
               className="rounded p-1 text-text-muted transition-colors hover:text-text-primary hover:bg-bg-elevated"
             >
               <FolderPlus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              title="Upload Files"
+              className="rounded p-1 text-text-muted transition-colors hover:text-text-primary hover:bg-bg-elevated"
+            >
+              <Upload className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -936,6 +973,27 @@ export function FileTree({
           onClose={closeContextMenu}
         />
       )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title="Delete file"
+        message="Are you sure you want to delete this file? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Alert dialog */}
+      <ConfirmDialog
+        open={alertMessage !== null}
+        title="Error"
+        message={alertMessage ?? ""}
+        alert
+        onConfirm={() => setAlertMessage(null)}
+        onCancel={() => setAlertMessage(null)}
+      />
     </div>
   );
 }
