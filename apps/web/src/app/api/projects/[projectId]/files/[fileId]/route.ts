@@ -348,7 +348,29 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ file: updatedFile });
+    let nextMainFile = project.mainFile;
+    if (file.isDirectory) {
+      const oldPrefix = `${file.path}/`;
+      if (project.mainFile === file.path) {
+        nextMainFile = newPath;
+      } else if (project.mainFile.startsWith(oldPrefix)) {
+        nextMainFile = `${newPath}/${project.mainFile.slice(oldPrefix.length)}`;
+      }
+    } else if (project.mainFile === file.path) {
+      nextMainFile = newPath;
+    }
+
+    if (nextMainFile !== project.mainFile) {
+      await db
+        .update(projects)
+        .set({
+          mainFile: nextMainFile,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, projectId));
+    }
+
+    return NextResponse.json({ file: updatedFile, mainFile: nextMainFile });
   } catch (error) {
     console.error("Error renaming file:", error);
     return NextResponse.json(
@@ -430,6 +452,35 @@ export async function DELETE(
         .where(eq(projectFiles.id, fileId));
     }
 
+    let nextMainFile = project.mainFile;
+    const deletedEntrypoint = file.isDirectory
+      ? project.mainFile === file.path || project.mainFile.startsWith(`${file.path}/`)
+      : project.mainFile === file.path;
+
+    if (deletedEntrypoint) {
+      const remainingFiles = await db
+        .select({
+          path: projectFiles.path,
+          isDirectory: projectFiles.isDirectory,
+        })
+        .from(projectFiles)
+        .where(eq(projectFiles.projectId, projectId));
+
+      const fallbackTex = remainingFiles
+        .filter((entry) => !entry.isDirectory && entry.path.toLowerCase().endsWith(".tex"))
+        .sort((a, b) => a.path.localeCompare(b.path))[0];
+
+      nextMainFile = fallbackTex?.path ?? "main.tex";
+
+      await db
+        .update(projects)
+        .set({
+          mainFile: nextMainFile,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, projectId));
+    }
+
     // Broadcast file deletion to collaborators
     broadcastFileEvent({
       type: "file:deleted",
@@ -439,7 +490,7 @@ export async function DELETE(
       path: file.path,
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, mainFile: nextMainFile });
   } catch (error) {
     console.error("Error deleting file:", error);
     return NextResponse.json(

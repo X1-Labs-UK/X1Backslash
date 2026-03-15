@@ -293,8 +293,11 @@ const presenceMap = new Map<string, Map<string, PresenceUser>>();
 const chatHistory = new Map<string, ChatMessage[]>();
 // Per-project chat read markers: projectId -> Map<userId, ChatReadReceipt>
 const chatReadState = new Map<string, Map<string, ChatReadReceipt>>();
+// Track completed builds we already announced in chat to avoid duplicate spam.
+const buildChatPosted = new Map<string, string>();
 
 const MAX_CHAT_HISTORY = 100;
+const MAX_BUILD_CHAT_POSTED = 1000;
 
 // Track which project each socket is in: socketId -> projectId
 const socketProjectMap = new Map<string, string>();
@@ -352,6 +355,16 @@ function formatDuration(durationMs?: number): string {
   if (!durationMs || durationMs < 0) return "";
   if (durationMs < 1000) return `${durationMs}ms`;
   return `${(durationMs / 1000).toFixed(1)}s`;
+}
+
+function rememberBuildChatPosted(buildKey: string, status: string): void {
+  buildChatPosted.set(buildKey, status);
+  if (buildChatPosted.size > MAX_BUILD_CHAT_POSTED) {
+    const oldestKey = buildChatPosted.keys().next().value as string | undefined;
+    if (oldestKey) {
+      buildChatPosted.delete(oldestKey);
+    }
+  }
 }
 
 // ─── Authentication Middleware ──────────────────────
@@ -704,33 +717,35 @@ function handleBuildUpdate(message: string) {
     });
   }
 
+  // Keep chat build notifications concise: only post final build result once.
+  if (!isComplete) {
+    return;
+  }
+
+  const buildKey = `${payload.projectId}:${payload.buildId}`;
+  if (buildChatPosted.has(buildKey)) {
+    return;
+  }
+  rememberBuildChatPosted(buildKey, payload.status);
+
   const actorName = triggeredByUserId
     ? connectedUserNames.get(triggeredByUserId) ?? null
     : null;
   const actorLabel = actorName ?? "A collaborator";
-  const shortBuildId = typeof payload.buildId === "string"
-    ? payload.buildId.slice(0, 8)
-    : "unknown";
 
   let text = "";
   switch (payload.status) {
-    case "queued":
-      text = `${actorLabel} queued build ${shortBuildId}.`;
-      break;
-    case "compiling":
-      text = `${actorLabel} started compiling build ${shortBuildId}.`;
-      break;
     case "success":
-      text = `Build ${shortBuildId} succeeded${formatDuration(payload.durationMs) ? ` in ${formatDuration(payload.durationMs)}` : ""}.`;
+      text = `${actorLabel} completed a successful build${formatDuration(payload.durationMs) ? ` in ${formatDuration(payload.durationMs)}` : ""}.`;
       break;
     case "timeout":
-      text = `Build ${shortBuildId} timed out${formatDuration(payload.durationMs) ? ` after ${formatDuration(payload.durationMs)}` : ""}.`;
+      text = `${actorLabel}'s build timed out${formatDuration(payload.durationMs) ? ` after ${formatDuration(payload.durationMs)}` : ""}.`;
       break;
     case "canceled":
-      text = `Build ${shortBuildId} was canceled.`;
+      text = `${actorLabel} canceled the build.`;
       break;
     default:
-      text = `Build ${shortBuildId} failed${formatDuration(payload.durationMs) ? ` after ${formatDuration(payload.durationMs)}` : ""}.`;
+      text = `${actorLabel}'s build failed${formatDuration(payload.durationMs) ? ` after ${formatDuration(payload.durationMs)}` : ""}.`;
       break;
   }
 

@@ -503,7 +503,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
                     seenLines.add(err.line);
                     const lineInfo = tr.state.doc.line(err.line);
                     const from = lineInfo.from;
-                    const to = Math.max(lineInfo.from, lineInfo.to);
+                    const to = lineInfo.to;
+                    // Skip empty lines — mark decorations cannot have zero-length ranges
+                    if (from >= to) continue;
                     decos.push(errorMarkDeco.range(from, to));
                   }
                 }

@@ -12,7 +12,18 @@ import {
   Users,
   Globe,
   Clock3,
+  Link2,
+  Copy,
+  Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils/cn";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ShareRole = "viewer" | "editor";
 type ExpiryOption = "30m" | "7d" | "never";
@@ -86,6 +97,7 @@ export function ShareDialog({
   const [publicExpiry, setPublicExpiry] = useState<ExpiryOption>("never");
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [updatingPublic, setUpdatingPublic] = useState(false);
+  const [copiedPublicUrl, setCopiedPublicUrl] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -131,6 +143,7 @@ export function ShareDialog({
       setError("");
       setSuccess("");
       setEmail("");
+      setCopiedPublicUrl(false);
     }
   }, [open, fetchCollaborators]);
 
@@ -294,23 +307,31 @@ export function ShareDialog({
                   required
                   className="min-w-[220px] flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
                 />
-                <select
+                <Select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as ShareRole)}
-                  className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                  onValueChange={(value) => setRole(value as ShareRole)}
                 >
-                  <option value="editor">Editor</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-                <select
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="editor">Editor</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
                   value={inviteExpiry}
-                  onChange={(e) => setInviteExpiry(e.target.value as ExpiryOption)}
-                  className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                  onValueChange={(value) => setInviteExpiry(value as ExpiryOption)}
                 >
-                  <option value="30m">30 min</option>
-                  <option value="7d">7 days</option>
-                  <option value="never">No expiry</option>
-                </select>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="Expiry" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30m">30 min</SelectItem>
+                    <SelectItem value="7d">7 days</SelectItem>
+                    <SelectItem value="never">No expiry</SelectItem>
+                  </SelectContent>
+                </Select>
                 <button
                   type="submit"
                   disabled={inviting || !email.trim()}
@@ -326,84 +347,135 @@ export function ShareDialog({
               </div>
             </form>
 
-            <div className="mb-5 rounded-lg border border-border p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Globe className="h-4 w-4 text-accent" />
-                <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
-                  Anyone access
-                </p>
+            <div className="mb-5 rounded-xl border border-border bg-bg-secondary/40 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-accent" />
+                    <p className="text-sm font-semibold text-text-primary">
+                      Public link sharing
+                    </p>
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                        publicEnabled
+                          ? "border-accent/35 bg-accent/15 text-accent"
+                          : "border-border bg-bg-elevated text-text-muted"
+                      )}
+                    >
+                      {publicEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-muted">
+                    Anyone with this link can open your project without signing in.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={publicEnabled}
+                  aria-label="Toggle public link sharing"
+                  onClick={() => setPublicEnabled((prev) => !prev)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 items-center rounded-md border transition-colors",
+                    publicEnabled
+                      ? "border-accent/70 bg-accent/25"
+                      : "border-border bg-bg-tertiary"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-5 w-5 rounded-sm transition-all",
+                      publicEnabled
+                        ? "translate-x-5 bg-accent shadow-sm shadow-accent/30"
+                        : "translate-x-0.5 bg-bg-primary"
+                    )}
+                  />
+                </button>
               </div>
 
-              <label className="mb-3 flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={publicEnabled}
-                  onChange={(e) => setPublicEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-border bg-bg-secondary text-accent focus:ring-accent"
-                />
-                Anyone with the public link can access (no sign-in required)
-              </label>
-
               {publicEnabled && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <select
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Select
                     value={publicRole}
-                    onChange={(e) => setPublicRole(e.target.value as ShareRole)}
-                    className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                    onValueChange={(value) => setPublicRole(value as ShareRole)}
                   >
-                    <option value="viewer">Viewer</option>
-                    <option value="editor">Editor</option>
-                  </select>
-                  <select
+                    <SelectTrigger className="w-[120px]">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select
                     value={publicExpiry}
-                    onChange={(e) => setPublicExpiry(e.target.value as ExpiryOption)}
-                    className="rounded-lg border border-border bg-bg-secondary px-2 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                    onValueChange={(value) => setPublicExpiry(value as ExpiryOption)}
                   >
-                    <option value="30m">30 min</option>
-                    <option value="7d">7 days</option>
-                    <option value="never">No expiry</option>
-                  </select>
+                    <SelectTrigger className="w-[130px]">
+                      <SelectValue placeholder="Expiry" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30m">30 min</SelectItem>
+                      <SelectItem value="7d">7 days</SelectItem>
+                      <SelectItem value="never">No expiry</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handlePublicShareSave}
-                disabled={updatingPublic}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {updatingPublic ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Clock3 className="h-4 w-4" />
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePublicShareSave}
+                  disabled={updatingPublic}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {updatingPublic ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock3 className="h-4 w-4" />
+                  )}
+                  Update public link
+                </button>
+
+                {publicEnabled && publicUrl && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(publicUrl);
+                        setCopiedPublicUrl(true);
+                        setSuccess("Public link copied");
+                        setTimeout(() => setCopiedPublicUrl(false), 1500);
+                      } catch {
+                        setError("Could not copy link");
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary transition-colors hover:bg-bg-elevated"
+                  >
+                    {copiedPublicUrl ? (
+                      <Check className="h-4 w-4 text-success" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    {copiedPublicUrl ? "Copied" : "Copy link"}
+                  </button>
                 )}
-                Save link sharing
-              </button>
+              </div>
 
               {publicEnabled && publicUrl && (
-                <div className="mt-3">
-                  <p className="mb-1 text-[11px] text-text-muted">Public link</p>
+                <div className="mt-3 rounded-lg border border-border bg-bg-secondary p-2.5">
+                  <p className="mb-1 text-[11px] text-text-muted">Public URL</p>
                   <div className="flex items-center gap-2">
+                    <Link2 className="h-3.5 w-3.5 text-text-muted" />
                     <input
                       type="text"
                       value={publicUrl}
                       readOnly
-                      className="min-w-[220px] flex-1 rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-secondary"
+                      className="min-w-0 flex-1 bg-transparent text-xs text-text-secondary outline-none"
                     />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(publicUrl);
-                          setSuccess("Public link copied");
-                        } catch {
-                          setError("Could not copy link");
-                        }
-                      }}
-                      className="rounded-lg border border-border bg-bg-secondary px-3 py-2 text-xs text-text-primary transition-colors hover:bg-bg-elevated"
-                    >
-                      Copy
-                    </button>
                   </div>
                 </div>
               )}
@@ -455,16 +527,20 @@ export function ShareDialog({
 
               {isOwner ? (
                 <div className="flex items-center gap-1.5">
-                  <select
+                  <Select
                     value={collab.role}
-                    onChange={(e) =>
-                      handleRoleChange(collab.id, e.target.value as ShareRole)
+                    onValueChange={(value) =>
+                      handleRoleChange(collab.id, value as ShareRole)
                     }
-                    className="rounded-md border border-border bg-bg-secondary px-2 py-1 text-xs text-text-secondary outline-none focus:border-accent"
                   >
-                    <option value="editor">Editor</option>
-                    <option value="viewer">Viewer</option>
-                  </select>
+                    <SelectTrigger className="h-8 w-[105px] rounded-md px-2 py-1 text-xs">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <button
                     type="button"
                     onClick={() => handleRemove(collab.id)}

@@ -20,9 +20,12 @@
 - **Live PDF Preview** — See your document update in real-time as you type. Auto-compilation on save with real-time WebSocket status updates via a standalone server.
 - **Full LaTeX Engine Support** — Compile with `auto`, `pdflatex`, `xelatex`, `lualatex`, or `latex`. `auto` is the default and selects the engine from source heuristics at build time.
 - **Project Management** — Create, organize, and manage multiple LaTeX projects from a clean dashboard.
+- **Main File Entrypoint Control** — Set any `.tex` file as the project entrypoint for compile/PDF output.
 - **Built-in File Tree** — Navigate project files with a sidebar file explorer. Create, rename, upload, and delete files.
 - **Code Editor** — Syntax-highlighted LaTeX editing powered by CodeMirror 6 with search, autocomplete, and keyboard shortcuts.
 - **Build Logs & Error Parsing** — Structured build output with clickable errors that jump to the offending line in the editor.
+- **AI Build Fixes (Optional)** — One-click `Fix with AI` can analyze compile errors/logs, apply minimal line edits, and queue a rebuild.
+- **Per-Purpose AI Model Settings** — Configure separate providers/models for build fixing and LaTeX writing, with account-level AI enable/disable.
 - **Resizable Panels** — IDE-like layout with draggable dividers between file tree, editor, PDF viewer, and build logs.
 - **Template System** — Start new projects from built-in templates: Blank, Article, Thesis, Beamer (Presentation), and Letter.
 - **Sandboxed Compilation** — Each build runs in an isolated Docker container with memory/CPU limits, network disabled, and auto-cleanup.
@@ -178,6 +181,28 @@ SECURE_COOKIES=false
 # WebSocket — override the URL the frontend connects to (usually auto-detected)
 # NEXT_PUBLIC_WS_URL=https://your-domain.com/ws
 
+# AI (optional fallback keys/models)
+# Users can also configure provider/model/key in Dashboard -> Settings.
+# If a user has not stored a key, these env vars are used as fallback.
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
+ANTHROPIC_API_KEY=
+CUSTOM_AI_API_KEY=
+
+# Optional endpoint overrides
+# OPENAI_BASE_URL=https://api.openai.com/v1
+# OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+# ANTHROPIC_BASE_URL=https://api.anthropic.com/v1
+# CUSTOM_AI_BASE_URL=https://your-custom-llm-host/v1
+
+# Optional default models
+# AI_BUILD_FIX_MODEL=gpt-4o-mini
+# AI_LATEX_WRITER_MODEL=gpt-4o-mini
+# AI_BUILD_FIX_MODEL_OPENROUTER=openai/gpt-4o-mini
+# AI_LATEX_WRITER_MODEL_OPENROUTER=openai/gpt-4o-mini
+# AI_BUILD_FIX_MODEL_ANTHROPIC=claude-3-5-sonnet-latest
+# AI_LATEX_WRITER_MODEL_ANTHROPIC=claude-3-5-sonnet-latest
+
 # Platform deployments (Dokploy, Coolify, etc.) — disables host port binding
 # COMPOSE_FILE=docker-compose.yml
 ```
@@ -205,6 +230,20 @@ SECURE_COOKIES=false
 | `SECURE_COOKIES` | `false` | Set to `true` if serving over HTTPS (reverse proxy with TLS) |
 | `WS_PATH_PREFIX` | *(empty)* | Set to `/ws` when behind a reverse proxy that routes `/ws/*` to the ws container |
 | `NEXT_PUBLIC_WS_URL` | *(auto-detect)* | Override WebSocket server URL for the frontend (e.g. `wss://your-domain.com/ws`) |
+| `OPENAI_API_KEY` | *(unset)* | Optional fallback OpenAI key when user-level key is not configured |
+| `OPENROUTER_API_KEY` | *(unset)* | Optional fallback OpenRouter key when user-level key is not configured |
+| `ANTHROPIC_API_KEY` | *(unset)* | Optional fallback Anthropic key when user-level key is not configured |
+| `CUSTOM_AI_API_KEY` | *(unset)* | Optional fallback key for custom AI endpoint |
+| `OPENAI_BASE_URL` | OpenAI default | Optional OpenAI-compatible base URL override |
+| `OPENROUTER_BASE_URL` | OpenRouter default | Optional OpenRouter base URL override |
+| `ANTHROPIC_BASE_URL` | Anthropic default | Optional Anthropic base URL override |
+| `CUSTOM_AI_BASE_URL` | *(unset)* | Base URL for custom AI provider |
+| `AI_BUILD_FIX_MODEL` | provider default | Default model for build fixes when provider is OpenAI |
+| `AI_LATEX_WRITER_MODEL` | provider default | Default model for LaTeX writer when provider is OpenAI |
+| `AI_BUILD_FIX_MODEL_OPENROUTER` | provider default | Default build-fix model when provider is OpenRouter |
+| `AI_LATEX_WRITER_MODEL_OPENROUTER` | provider default | Default LaTeX-writer model when provider is OpenRouter |
+| `AI_BUILD_FIX_MODEL_ANTHROPIC` | provider default | Default build-fix model when provider is Anthropic |
+| `AI_LATEX_WRITER_MODEL_ANTHROPIC` | provider default | Default LaTeX-writer model when provider is Anthropic |
 | `COMPOSE_FILE` | *(unset)* | Set to `docker-compose.yml` to disable host port exposure (for platforms) |
 
 ---
@@ -262,6 +301,16 @@ curl "https://your-instance.com/api/v1/compile/JOB_ID/output?format=pdf" \
 | `GET` | `/api/v1/labels/` | Get all project labels associated with a user |
 | `PUT` | `/api/v1/labels/attach` | Attach a label to a project. This will create a new label if one doesn't already exist. |
 | `PUT` | `/api/v1/labels/detach` | Detach a label to a project. This will also delete the label if no projects are attached to it anymore. |
+
+### Dashboard AI Endpoints (Session Auth)
+
+These endpoints are intended for the signed-in dashboard experience and require session-cookie auth. API keys are not accepted.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/ai/settings` | Get current AI settings (`enabled`, `buildFix`, `latexWriter`) for the signed-in user |
+| `PUT` | `/api/ai/settings` | Update AI enabled flag and provider/model config for build fixing and LaTeX writing |
+| `POST` | `/api/ai/fix-build` | Generate and apply strict line-based edits from recent compile errors/logs, then queue compile |
 
 ### API Key Management
 

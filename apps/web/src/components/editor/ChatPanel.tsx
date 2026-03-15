@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import { cn } from "@/lib/utils/cn";
 import { MessageCircle, Send, ChevronUp, ChevronDown } from "lucide-react";
 import type { ChatMessage } from "@backslash/shared";
@@ -50,6 +50,15 @@ export function ChatPanel({
   const initializedMessagesRef = useRef(false);
   const lastMarkedReadRef = useRef<string | null>(null);
 
+  const markLatestAsRead = useCallback(() => {
+    if (!onMarkRead || messages.length === 0) return;
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage?.id) return;
+    if (lastMarkedReadRef.current === lastMessage.id) return;
+    lastMarkedReadRef.current = lastMessage.id;
+    onMarkRead(lastMessage.id);
+  }, [messages, onMarkRead]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -72,6 +81,7 @@ export function ChatPanel({
     if (!collapsed) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       setUnreadCount(0);
+      markLatestAsRead();
     } else if (messages.length > prevMessageCountRef.current) {
       // Increment unread count only for messages from others
       const incoming = messages.slice(prevMessageCountRef.current);
@@ -81,16 +91,12 @@ export function ChatPanel({
       }
     }
     prevMessageCountRef.current = messages.length;
-  }, [messages, collapsed, currentUserId]);
+  }, [messages, collapsed, currentUserId, markLatestAsRead]);
 
   useEffect(() => {
-    if (collapsed || messages.length === 0 || !onMarkRead) return;
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage?.id) return;
-    if (lastMarkedReadRef.current === lastMessage.id) return;
-    lastMarkedReadRef.current = lastMessage.id;
-    onMarkRead(lastMessage.id);
-  }, [collapsed, messages, onMarkRead]);
+    if (collapsed) return;
+    markLatestAsRead();
+  }, [collapsed, markLatestAsRead]);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -116,8 +122,12 @@ export function ChatPanel({
       <button
         type="button"
         onClick={() => {
+          const opening = collapsed;
           setCollapsed((prev) => !prev);
-          if (collapsed) setUnreadCount(0);
+          if (opening) {
+            setUnreadCount(0);
+            markLatestAsRead();
+          }
         }}
         className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-text-primary hover:bg-bg-elevated transition-colors rounded-t-lg"
       >

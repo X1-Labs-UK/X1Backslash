@@ -5,6 +5,7 @@ import {
   Panel,
   PanelGroup,
   PanelResizeHandle,
+  ImperativePanelHandle,
 } from "react-resizable-panels";
 import { EditorHeader } from "@/components/editor/EditorHeader";
 import { FileTree } from "@/components/editor/FileTree";
@@ -112,6 +113,12 @@ interface EditorLayoutProps {
   onIdentityResolved?: (user: CurrentUser) => void;
 }
 
+interface AiSettingsResponse {
+  settings: {
+    enabled: boolean;
+  };
+}
+
 // ─── Editor Layout ──────────────────────────────────
 
 export function EditorLayout({
@@ -129,6 +136,7 @@ export function EditorLayout({
 
   const [currentUser, setCurrentUser] = useState<CurrentUser>(initialCurrentUser);
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
+  const [mainFilePath, setMainFilePath] = useState(project.mainFile);
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeFileContent, setActiveFileContent] = useState<string>("");
@@ -159,6 +167,10 @@ export function EditorLayout({
   );
   const [buildActorName, setBuildActorName] = useState<string | null>(null);
   const [buildErrors, setBuildErrors] = useState<LogError[]>([]);
+  const [aiFixExplanation, setAiFixExplanation] = useState<string | null>(null);
+  const [fixingWithAi, setFixingWithAi] = useState(false);
+  const [aiFixEnabled, setAiFixEnabled] = useState(false);
+  const [buildLogsExpanded, setBuildLogsExpanded] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
 
   // Disable auto-compile if last build failed (prevents rebuild loop on refresh)
@@ -224,6 +236,7 @@ export function EditorLayout({
 
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
+  const buildLogsPanelRef = useRef<ImperativePanelHandle>(null);
   const editorScrollRef = useRef<number | null>(null);
   const editorSelectionRef = useRef<{ anchor: number; head: number } | null>(
     null
@@ -343,6 +356,38 @@ export function EditorLayout({
     },
     [currentUser.id, presenceUsers]
   );
+
+  useEffect(() => {
+    if (!canEdit || shareToken) {
+      setAiFixEnabled(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/ai/settings", { cache: "no-store" });
+        if (!res.ok || cancelled) {
+          if (!cancelled) setAiFixEnabled(false);
+          return;
+        }
+
+        const data = (await res.json()) as AiSettingsResponse;
+        if (!cancelled) {
+          setAiFixEnabled(Boolean(data.settings?.enabled));
+        }
+      } catch {
+        if (!cancelled) {
+          setAiFixEnabled(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit, shareToken]);
 
   // ─── Helpers ───────────────────────────────────────
 
@@ -869,6 +914,7 @@ export function EditorLayout({
     async (content: string, shouldCompile: boolean) => {
       if (!canEdit) return;
       if (!activeFileId) return;
+      if (savedContentRef.current.get(activeFileId) === content) return;
 
       // Decide whether to actually trigger a compile
       const willCompile = shouldCompile && !compilingRef.current;
@@ -918,11 +964,14 @@ export function EditorLayout({
 
       setActiveFileContent(content);
 
+      let hasUnsavedChanges = false;
+
       if (activeFileId) {
         fileContentsRef.current.set(activeFileId, content);
 
         const savedContent = savedContentRef.current.get(activeFileId);
-        if (savedContent !== content) {
+        hasUnsavedChanges = savedContent !== content;
+        if (hasUnsavedChanges) {
           setDirtyFileIds((prev) => {
             const next = new Set(prev);
             next.add(activeFileId);
@@ -938,6 +987,7 @@ export function EditorLayout({
       }
 
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (!activeFileId || !hasUnsavedChanges) return;
 
       const delay = autoCompileEnabled ? 2000 : 1000;
 
@@ -950,17 +1000,19 @@ export function EditorLayout({
 
   const handleImmediateSave = useCallback(() => {
     if (!activeFileId) return;
+    if (!dirtyFileIds.has(activeFileId)) return;
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
     handleSave(activeFileContent, true);
-  }, [activeFileId, activeFileContent, handleSave]);
+  }, [activeFileId, activeFileContent, dirtyFileIds, handleSave]);
 
   const handleCompile = useCallback(async () => {
     if (!canEdit) return;
     if (compilingRef.current) return;
 
+    setAiFixExplanation(null);
     saveViewPositionsBeforeBuild();
     compilingRef.current = true;
     pendingRecompileRef.current = false;
@@ -992,6 +1044,114 @@ export function EditorLayout({
     saveViewPositionsBeforeBuild,
     startBuildPolling,
     withShareToken,
+  ]);
+
+  const handleFixWithAi = useCallback(async () => {
+    if (!canEdit) return;
+    if (fixingWithAi) return;
+    if (compilingRef.current) return;
+
+    const activeFilePath =
+      activeFileId
+        ? files.find((file) => file.id === activeFileId)?.path ?? mainFilePath
+        : mainFilePath;
+
+    setFixingWithAi(true);
+    setAiFixExplanation(null);
+    setBuildActorName("You");
+    setBuildStatus("queued");
+    setBuildErrors([]);
+    setPdfLoading(true);
+    setCompiling(true);
+    compilingRef.current = true;
+    pendingRecompileRef.current = false;
+    saveViewPositionsBeforeBuild();
+
+    try {
+      // Persist current editor buffer before requesting AI fixes.
+      if (activeFileId) {
+        await handleSave(activeFileContent, false);
+      }
+
+      const res = await fetch("/api/ai/fix-build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          activeFilePath,
+          activeFileContent,
+          errorLimit: 8,
+          recentBuildLimit: 3,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBuildStatus("error");
+        setBuildLogs(data.error || "AI fix failed");
+        resetCompileState();
+        return;
+      }
+
+      if (typeof data.explanation === "string" && data.explanation.trim().length > 0) {
+        setAiFixExplanation(data.explanation);
+      }
+
+      const compileStatusCode =
+        typeof data.compile?.statusCode === "number" ? data.compile.statusCode : 500;
+      if (compileStatusCode >= 400) {
+        setBuildStatus("error");
+        const compileError =
+          typeof data.compile?.result?.error === "string"
+            ? data.compile.result.error
+            : "AI fixes were applied, but compile could not be queued.";
+        setBuildLogs(compileError);
+        resetCompileState();
+        return;
+      }
+
+      const touchedFilePaths = new Set<string>(
+        Array.isArray(data.appliedEdits)
+          ? data.appliedEdits
+              .map((edit: { filePath?: string }) => edit.filePath)
+              .filter((filePath: unknown): filePath is string => typeof filePath === "string")
+          : []
+      );
+
+      if (touchedFilePaths.size > 0) {
+        touchedFilePaths.forEach((filePath) => {
+          const touched = files.find((file) => file.path === filePath);
+          if (!touched) return;
+          fileContentsRef.current.delete(touched.id);
+          savedContentRef.current.delete(touched.id);
+        });
+      }
+
+      if (activeFileId) {
+        fetchFileContent(activeFileId);
+      }
+
+      startBuildPolling();
+    } catch {
+      setBuildStatus("error");
+      setBuildLogs("AI fix failed. Please try again.");
+      resetCompileState();
+    } finally {
+      setFixingWithAi(false);
+    }
+  }, [
+    activeFileContent,
+    activeFileId,
+    canEdit,
+    fetchFileContent,
+    files,
+    fixingWithAi,
+    handleSave,
+    mainFilePath,
+    project.id,
+    resetCompileState,
+    saveViewPositionsBeforeBuild,
+    startBuildPolling,
   ]);
 
   const handleCancelBuild = useCallback(async () => {
@@ -1074,11 +1234,16 @@ export function EditorLayout({
       if (res.ok) {
         const data = await res.json();
         setFiles(data.files);
+        if (typeof data.mainFile === "string" && data.mainFile !== mainFilePath) {
+          setMainFilePath(data.mainFile);
+          setPdfUrl(null);
+          setBuildStatus((prev) => (prev === "success" ? "idle" : prev));
+        }
       }
     } catch {
       // Silently fail
     }
-  }, [project.id, withShareToken]);
+  }, [mainFilePath, project.id, withShareToken]);
 
   const isImageFile = useCallback(
     (fileId: string | null): boolean => {
@@ -1198,7 +1363,7 @@ export function EditorLayout({
     }
     if (files.length === 0) return;
 
-    const mainFile = files.find((f) => f.path === project.mainFile);
+    const mainFile = files.find((f) => f.path === mainFilePath);
     if (mainFile) {
       autoOpenedMainRef.current = true;
       handleFileSelect(mainFile.id, mainFile.path);
@@ -1210,7 +1375,7 @@ export function EditorLayout({
       autoOpenedMainRef.current = true;
       handleFileSelect(fallbackTex.id, fallbackTex.path);
     }
-  }, [activeFileId, files, handleFileSelect, openFiles.length, project.mainFile]);
+  }, [activeFileId, files, handleFileSelect, mainFilePath, openFiles.length]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1219,6 +1384,14 @@ export function EditorLayout({
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [clearAllPolling]);
+
+  useEffect(() => {
+    if (buildLogsExpanded) {
+      buildLogsPanelRef.current?.expand();
+      return;
+    }
+    buildLogsPanelRef.current?.collapse();
+  }, [buildLogsExpanded]);
 
   return (
     <div className="flex h-full w-full flex-col bg-bg-primary">
@@ -1229,7 +1402,7 @@ export function EditorLayout({
         compiling={compiling}
         onCompile={handleCompile}
         autoCompileEnabled={autoCompileEnabled}
-        onAutoCompileToggle={() => setAutoCompileEnabled((prev) => !prev)}
+        onAutoCompileToggle={(enabled) => setAutoCompileEnabled(enabled)}
         buildStatus={buildStatus}
         onCancelBuild={handleCancelBuild}
         presenceUsers={presenceUsers}
@@ -1264,7 +1437,13 @@ export function EditorLayout({
                   projectId={project.id}
                   files={files}
                   activeFileId={activeFileId}
+                  mainFilePath={mainFilePath}
                   onFileSelect={handleFileSelect}
+                  onMainFileChange={(nextMainFilePath) => {
+                    setMainFilePath(nextMainFilePath);
+                    setPdfUrl(null);
+                    setBuildStatus((prev) => (prev === "success" ? "idle" : prev));
+                  }}
                   onFilesChanged={refreshFiles}
                   shareToken={shareToken}
                   readOnly={!canEdit}
@@ -1355,7 +1534,15 @@ export function EditorLayout({
           <PanelResizeHandle className="h-2 cursor-row-resize touch-none bg-transparent transition-colors hover:bg-accent/30 data-[resize-handle-active]:bg-accent/30 relative after:absolute after:inset-x-0 after:top-1/2 after:-translate-y-1/2 after:h-px after:bg-border" />
 
           {/* Build logs */}
-          <Panel defaultSize={20} minSize={5} collapsible collapsedSize={4}>
+          <Panel
+            ref={buildLogsPanelRef}
+            defaultSize={20}
+            minSize={5}
+            collapsible
+            collapsedSize={4}
+            onCollapse={() => setBuildLogsExpanded(false)}
+            onExpand={() => setBuildLogsExpanded(true)}
+          >
             <BuildLogs
               logs={buildLogs}
               status={buildStatus}
@@ -1363,6 +1550,12 @@ export function EditorLayout({
               errors={buildErrors}
               actorName={buildActorName}
               onErrorClick={handleErrorClick}
+              canFixWithAi={canEdit && !shareToken && aiFixEnabled}
+              fixingWithAi={fixingWithAi}
+              onFixWithAi={handleFixWithAi}
+              aiExplanation={aiFixExplanation}
+              expanded={buildLogsExpanded}
+              onExpandedChange={setBuildLogsExpanded}
             />
           </Panel>
         </PanelGroup>
